@@ -21,7 +21,7 @@ global method1 % Parameter estimation method
 
 if exist('options_pass','var')==1 && isempty(options_pass)==0
 
-    options1=options_pass; 
+    options1=options_pass;
 
     [cadfilename1_INP,caddisease_INP,datatype_INP, dist1_INP, numstartpoints_INP,M_INP, model_INP, params_INP, vars_INP, windowsize1_INP,tstart1_INP,tend1_INP,printscreen1_INP2]=options1();
 
@@ -310,34 +310,34 @@ for i=tstart1:1:tend1  %rolling window analysis
 
             % plot 95% PI
 
-            line1=plot(timevect2,median1,'r-')
+            line1=plot(timevect2,median1,'r-');
             set(line1,'LineWidth',2)
 
             hold on
-            line1=plot(timevect2,LB1,'r--')
+            line1=plot(timevect2,LB1,'r--');
             set(line1,'LineWidth',2)
 
-            line1=plot(timevect2,UB1,'r--')
+            line1=plot(timevect2,UB1,'r--');
             set(line1,'LineWidth',2)
 
             % plot model fit
 
             color1=gray(8);
-            line1=plot(timevect1,fit1,'color',color1(6,:))
+            line1=plot(timevect1,fit1,'color',color1(6,:));
             set(line1,'LineWidth',1)
 
-            line1=plot(timevect2,median1,'r-')
+            line1=plot(timevect2,median1,'r-');
             set(line1,'LineWidth',2)
 
             % plot the data
 
-            line1=plot(timevect_all,data_all(:,j),'bo')
+            line1=plot(timevect_all,data_all(:,j),'bo');
             set(line1,'LineWidth',2)
 
             line2=[timevect1(end) 0;timevect1(end) max(quantile(forecast2',0.975))*1.5];
 
             if forecastingperiod>0
-                line1=plot(line2(:,1),line2(:,2),'k--')
+                line1=plot(line2(:,1),line2(:,2),'k--');
                 set(line1,'LineWidth',2)
             end
 
@@ -386,16 +386,16 @@ for i=tstart1:1:tend1  %rolling window analysis
         quantilescss=[quantilescss;quantilesc];
         quantilesfss=[quantilesfss;quantilesf];
 
-        % Label for quantile forecast 
+        % Label for quantile forecast
         quantNamesRanked = {'Q_0.010', 'Q_0.025', 'Q_0.050', 'Q_0.100', 'Q_0.150', 'Q_0.200', 'Q_0.250', 'Q_0.300', 'Q_0.350', 'Q_0.400', 'Q_0.450', 'Q_0.500', 'Q_0.550', 'Q_0.600', 'Q_0.650', 'Q_0.700', 'Q_0.750', 'Q_0.800', 'Q_0.850', 'Q_0.900', 'Q_0.950', 'Q_0.975', 'Q_0.990'};
-        
-        % Creating the combined quantile array and changing to table 
+
+        % Creating the combined quantile array and changing to table
         combinedQuantiles = [quantilesc; quantilesf];
         combinedQuantilesTable = array2table(combinedQuantiles, 'VariableNames', quantNamesRanked);
-        
-        % Exporting the quantile forecast file 
+
+        % Exporting the quantile forecast file
         writetable(combinedQuantilesTable,strcat('./output/quantile-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-0-',caddisease,'-',datatype,'.csv'))
-        
+
 
 
         currentEnd1 = currentEnd1 + length(data1(:,1));
@@ -409,6 +409,8 @@ for i=tstart1:1:tend1  %rolling window analysis
     % <========================================================================================>
 
     % estimate median and 95% CI from distribution of parameter estimates
+
+    Phatss_model1(:,j)=Phatss_model1(:,j)+0;
 
     for j=1:params.num
 
@@ -666,4 +668,101 @@ writetable(T,strcat('./output/parameters-composite-model_name-',model.name,'-fix
 T = array2table(AICcs);
 T.Properties.VariableNames(1:5) = {'time','AICc','AICc part1','AICc part2','numparams'};
 writetable(T,strcat('./output/AICc-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-0-',caddisease,'-',datatype,'.csv'))
+
+
+%%%
+
+% Display Parameters in the Command Window
+disp('<============================================================================>');
+disp('                          Parameter Settings Summary                          ');
+disp('<============================================================================>');
+
+% Display Dataset Properties
+disp('Dataset Properties:');
+disp(['  - Time-series Data File: ', cadfilename1]);
+disp(['  - Disease: ', caddisease]);
+disp(['  - Data Type: ', datatype]);
+disp('<============================================================================>');
+
+% Display Parameter Estimation Settings
+disp('Parameter Estimation Settings:');
+disp(['  - Estimation Method (method1): ', num2str(method1)]);
+switch method1
+    case 0
+        disp('    Method Description: Nonlinear Least Squares (LSQ)');
+    case 1
+        disp('    Method Description: Maximum Likelihood Estimation (MLE) Poisson');
+    case 3
+        disp('    Method Description: MLE Negative Binomial (VAR = mean + alpha * mean)');
+    case 4
+        disp('    Method Description: MLE Negative Binomial (VAR = mean + alpha * mean^2)');
+    case 5
+        disp('    Method Description: MLE Negative Binomial (VAR = mean + alpha * mean^d)');
+    case 6
+        disp('    Method Description: Sum of Absolute Deviations (SAD), Laplace distribution');
+    otherwise
+        disp('    Method Description: Unknown');
+end
+
+disp(['  - Error Structure (dist1): ', num2str(dist1)]);
+switch dist1
+    case 0
+        disp('    Error Structure Description: Normal Distribution');
+    case 1
+        disp('    Error Structure Description: Poisson Error Structure');
+    case 2
+        disp('    Error Structure Description: Negative Binomial (VAR = factor1 * mean)');
+    case 3
+        disp('    Error Structure Description: Negative Binomial (VAR = mean + alpha * mean)');
+    case 4
+        disp('    Error Structure Description: Negative Binomial (VAR = mean + alpha * mean^2)');
+    case 5
+        disp('    Error Structure Description: Negative Binomial (VAR = mean + alpha * mean^d)');
+    case 6
+        disp('    Error Structure Description: Laplace Distribution (SAD)');
+    otherwise
+        disp('    Error Structure Description: Unknown');
+end
+
+disp(['  - Number of Initial Guesses (MultiStart): ', num2str(numstartpoints)]);
+disp(['  - Number of Bootstrap Realizations: ', num2str(M)]);
+disp('<============================================================================>');
+
+% Display ODE Model Information
+disp('ODE Model:');
+disp(['  - Model Function: ', func2str(model.fc)]);
+disp(['  - Model Name: ', model.name]);
+disp(['  - Composite Parameter: ', params.composite_name]);
+disp('<============================================================================>');
+
+% Display Model Parameters
+disp('Model Parameters:');
+disp(['  - Labels: ', strjoin(params.label, ', ')]);
+disp(['  - Lower Bounds: ', num2str(params.LB)]);
+disp(['  - Upper Bounds: ', num2str(params.UB)]);
+disp(['  - Initial Guesses: ', num2str(params.initial)]);
+disp(['  - Fixed Parameters: ', num2str(params.fixed)]);
+disp(['  - Fix Initial Value (fixI0): ', num2str(params.fixI0)]);
+disp('<============================================================================>');
+
+% Display Model Variables
+disp('Model Variables:');
+disp(['  - Labels: ', strjoin(vars.label, ', ')]);
+disp(['  - Initial Conditions: ', num2str(vars.initial)]);
+disp(['  - Fit Variable Index: ', num2str(vars.fit_index)]);
+disp(['  - Fit Derivative (fit_diff): ', num2str(vars.fit_diff)]);
+disp('<============================================================================>');
+
+% Display Rolling Window Parameters
+disp('Rolling Window Parameters:');
+disp(['  - Window Size: ', num2str(windowsize1)]);
+disp(['  - Start Time Point: ', num2str(tstart1)]);
+disp(['  - End Time Point: ', num2str(tend1)]);
+disp(['  - Print Results to Screen (printscreen1): ', num2str(printscreen1)]);
+disp('<============================================================================>');
+disp('                          End of Parameter Summary                            ');
+disp('<============================================================================>');
+
+
+end
 

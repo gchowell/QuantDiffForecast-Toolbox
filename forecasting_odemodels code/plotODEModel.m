@@ -172,10 +172,10 @@ for x=1:length(vars.fit_index)
 
         subplot(length(vars.fit_index),2,cc1)
         % plot the fitting variable
-        line1=plot(timevect,fitcurve,'b-')
+        line1=plot(timevect,fitcurve,'b-');
         hold on
         subplot(length(vars.fit_index),2,cc1+1)
-        line1=plot(timevect,fitcurve,'b-')
+        line1=plot(timevect,fitcurve,'b-');
         hold on
         curvess=[curvess fitcurve];
 
@@ -188,11 +188,11 @@ for x=1:length(vars.fit_index)
 
     subplot(length(vars.fit_index),2,cc1)
     % plot the fitting variable
-    line1=plot(timevect,curvess(:,index1),'g-')
+    line1=plot(timevect,curvess(:,index1),'g-');
     set(line1,'LineWidth',4)
     hold on
     subplot(length(vars.fit_index),2,cc1+1)
-    line1=plot(timevect,curvess(:,index1),'g-')
+    line1=plot(timevect,curvess(:,index1),'g-');
     set(line1,'LineWidth',4)
 
     subplot(length(vars.fit_index),2,cc1)
@@ -222,12 +222,12 @@ for x=1:length(vars.fit_index)
     % plot time series data
 
     subplot(length(vars.fit_index),2,cc1)
-    line1=plot(data(:,1),data(:,x+1),'ro')
+    line1=plot(data(:,1),data(:,x+1),'ro');
     set(line1,'markersize',6,'LineWidth',2)
     axis([data(1,1) data(end,1) 0 max(max(curvess))+5])
 
     subplot(length(vars.fit_index),2,cc1+1)
-    line1=plot(data(:,1),data(:,x+1),'ro')
+    line1=plot(data(:,1),data(:,x+1),'ro');
     set(line1,'markersize',6,'LineWidth',2)
     axis([data(1,1) data(end,1) 0 max(data(:,x+1))+5])
 
@@ -325,11 +325,11 @@ if 0
 
     M=1;
 
-     %dist1=0; factor1=4; %Normal error structure
+    %dist1=0; factor1=4; %Normal error structure
 
-     dist1=6; factor1=20; %Laplace error structure
-    
-     %dist1=1;
+    dist1=6; factor1=20; %Laplace error structure
+
+    %dist1=1;
     %factor1=1;
 
     d=1;
@@ -358,3 +358,109 @@ if 0
     save(strcat('./input/curve-',model.name,'-M-',num2str(M),'-dist1-',num2str(dist1),'-factor1-',num2str(factor1),'.txt'),'curves','-ascii')
 
 end
+
+
+%%%%
+
+% Display Parameters in the Command Window
+disp('<============================================================================>');
+disp('                          Parameter Settings Summary                          ');
+disp('<============================================================================>');
+
+% Display Dataset Properties
+disp('Dataset Properties:');
+disp(['  - Time-series Data File: ', cadfilename1]);
+disp(['  - Disease: ', caddisease]);
+disp(['  - Data Type: ', datatype]);
+disp('<============================================================================>');
+
+% Display Parameter Estimation Settings
+disp('Parameter Estimation Settings:');
+disp(['  - Estimation Method (method1): ', num2str(method1)]);
+switch method1
+    case 0
+        disp('    Method Description: Nonlinear Least Squares (LSQ)');
+    case 1
+        disp('    Method Description: Maximum Likelihood Estimation (MLE) Poisson');
+    case 3
+        disp('    Method Description: MLE Negative Binomial (VAR = mean + alpha * mean)');
+    case 4
+        disp('    Method Description: MLE Negative Binomial (VAR = mean + alpha * mean^2)');
+    case 5
+        disp('    Method Description: MLE Negative Binomial (VAR = mean + alpha * mean^d)');
+    case 6
+        disp('    Method Description: Sum of Absolute Deviations (SAD), Laplace distribution');
+    otherwise
+        disp('    Method Description: Unknown');
+end
+
+disp(['  - Error Structure (dist1): ', num2str(dist1)]);
+switch dist1
+    case 0
+        disp('    Error Structure Description: Normal Distribution');
+    case 1
+        disp('    Error Structure Description: Poisson Error Structure');
+    case 2
+        disp('    Error Structure Description: Negative Binomial (VAR = factor1 * mean)');
+    case 3
+        disp('    Error Structure Description: Negative Binomial (VAR = mean + alpha * mean)');
+    case 4
+        disp('    Error Structure Description: Negative Binomial (VAR = mean + alpha * mean^2)');
+    case 5
+        disp('    Error Structure Description: Negative Binomial (VAR = mean + alpha * mean^d)');
+    case 6
+        disp('    Error Structure Description: Laplace Distribution (SAD)');
+    otherwise
+        disp('    Error Structure Description: Unknown');
+end
+
+disp(['  - Number of Initial Guesses (MultiStart): ', num2str(numstartpoints)]);
+disp(['  - Number of Bootstrap Realizations: ', num2str(M)]);
+disp('<============================================================================>');
+
+% Display ODE Model Information
+disp('ODE Model:');
+disp(['  - Model Function: ', func2str(model.fc)]);
+disp(['  - Model Name: ', model.name]);
+disp(['  - Composite Parameter: ', params.composite_name]);
+disp('<============================================================================>');
+
+% Display Model Parameters
+disp('Model Parameters:');
+disp(['  - Labels: ', strjoin(params.label, ', ')]);
+disp(['  - Lower Bounds: ', num2str(params.LB)]);
+disp(['  - Upper Bounds: ', num2str(params.UB)]);
+disp(['  - Initial Guesses: ', num2str(params.initial)]);
+disp(['  - Fixed Parameters: ', num2str(params.fixed)]);
+disp(['  - Fix Initial Value (fixI0): ', logicalToString(params.fixI0)]);
+disp('<============================================================================>');
+
+% Display Model Variables
+disp('Model Variables:');
+disp(['  - Labels: ', strjoin(vars.label, ', ')]);
+disp(['  - Initial Conditions: ', num2str(vars.initial)]);
+disp(['  - Fit Variable Index: ', num2str(vars.fit_index)]);
+disp(['  - Fit Derivative (fit_diff): ', logicalToString(vars.fit_diff)]);
+disp('<============================================================================>');
+
+% Display Rolling Window Parameters
+disp('Rolling Window Parameters:');
+disp(['  - Window Size: ', num2str(windowsize1)]);
+disp(['  - Start Time Point: ', num2str(tstart1_INP)]);
+disp(['  - End Time Point: ', num2str(tend1_INP)]);
+disp(['  - Print Results to Screen (printscreen1): ', logicalToString(printscreen1)]);
+disp('<============================================================================>');
+disp('                          End of Parameter Summary                            ');
+disp('<============================================================================>');
+
+% Logical to String Conversion
+    function str = logicalToString(logicalValue)
+        if logicalValue
+            str = 'Yes';
+        else
+            str = 'No';
+        end
+    end
+
+end
+

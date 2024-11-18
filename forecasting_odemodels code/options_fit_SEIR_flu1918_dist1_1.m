@@ -2,98 +2,97 @@
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
 
-function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model,params,vars,windowsize1,tstart1,tend1,printscreen1]=options_fit_SEIR_flu1918
+function [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, model, params, vars, windowsize1, tstart1, tend1, printscreen1] = options_fit_SEIR_flu1918
 
 % <============================================================================>
-% <=================== Declare global variables =======================================>
+% <=================== Declare Global Variables ==============================>
 % <============================================================================>
-
-global method1 % Parameter estimation method
+% Declare global variables used in this function.
+global method1; % Parameter estimation method
 
 % <============================================================================>
-% <================================ Datasets properties =======================>
+% <========================= Dataset Properties ==============================>
 % <============================================================================>
-% Located in the input folder, the time series data file is a text file with extension *.txt. 
-% The time series data file contains the incidence curve of the epidemic of interest. 
-% The first column corresponds to time index: 0,1,2, ... and the second
-% column corresponds to the observed time series data.
+% The time series data file contains the incidence curve of the epidemic of interest.
+% - The first column corresponds to the time index (e.g., 0, 1, 2, ...).
+% - The second column contains the observed time-series data.
 
-cadfilename1='curve-flu1918SF'
+cadfilename1 = 'curve-flu1918SF'; % Name of the time-series data file
+caddisease = '1918 Flu';          % Name of the disease related to the time-series data
+datatype = 'cases';               % Nature of the data (e.g., cases, deaths, hospitalizations)
 
-caddisease='1918 Flu'; % string indicating the name of the disease related to the time series data
+% <============================================================================>
+% <======================= Parameter Estimation ==============================>
+% <============================================================================>
+% Define the method for parameter estimation and associated error structure.
 
-datatype='cases'; % string indicating the nature of the data (cases, deaths, hospitalizations, etc)
+method1 = 1; % Parameter estimation method:
+% 0 - Nonlinear least squares (LSQ)
+% 1 - Maximum Likelihood Estimation (MLE) Poisson
+% 3 - MLE Negative Binomial (VAR = mean + alpha * mean)
+% 4 - MLE Negative Binomial (VAR = mean + alpha * mean^2)
+% 5 - MLE Negative Binomial (VAR = mean + alpha * mean^d)
+% 6 - Sum of Absolute Deviations (SAD), Laplace distribution
 
-% <=============================================================================>
-% <=========================== Parameter estimation ============================>
-% <=============================================================================>
+dist1 = 1; % Error structure type:
+% 0 - Normal distribution (method1 = 0)
+% 1 - Poisson error structure (method1 = 0 or method1 = 1)
+% 2 - Negative Binomial (VAR = factor1 * mean, empirically estimated)
+% 3 - Negative Binomial (VAR = mean + alpha * mean)
+% 4 - Negative Binomial (VAR = mean + alpha * mean^2)
+% 5 - Negative Binomial (VAR = mean + alpha * mean^d)
+% 6 - SAD method, Laplace distribution (method1 = 6)
 
-method1=1; % Type of estimation method
-
-% Nonlinear least squares (LSQ)=0,
-% MLE Poisson=1,
-% MLE (Neg Binomial)=3, with VAR=mean+alpha*mean;
-% MLE (Neg Binomial)=4, with VAR=mean+alpha*mean^2;
-% MLE (Neg Binomial)=5, with VAR=mean+alpha*mean^d;
-
-dist1=1; % Define dist1 which is the type of error structure. See below:
-
-%dist1=0; % Normal distribution to model error structure (method1=0)
-%dist1=1; % Poisson error structure (method1=0 OR method1=1)
-%dist1=2; % Neg. binomial error structure where var = factor1*mean where
-                  % factor1 is empirically estimated from the time series
-                  % data (method1=0)
-%dist1=3; % MLE (Neg Binomial) with VAR=mean+alpha*mean  (method1=3)
-%dist1=4; % MLE (Neg Binomial) with VAR=mean+alpha*mean^2 (method1=4)
-%dist1=5; % MLE (Neg Binomial)with VAR=mean+alpha*mean^d (method1=5)
-
-
+% Automatically assign dist1 based on method1
 switch method1
     case 1
-        dist1=1;
+        dist1 = 1;
     case 3
-        dist1=3;
+        dist1 = 3;
     case 4
-        dist1=4;
+        dist1 = 4;
     case 5
-        dist1=5;
+        dist1 = 5;
+    case 6
+        dist1 = 6;
 end
 
-numstartpoints=10; % Number of initial guesses for optimization procedure using MultiStart
+numstartpoints = 10; % Number of initial guesses for optimization using MultiStart
+B = 300;             % Number of bootstrap realizations for parameter uncertainty
 
-B=300; % number of bootstrap realizations to characterize parameter uncertainty
+% <============================================================================>
+% <============================== ODE Model ==================================>
+% <============================================================================>
+% Define the model function and associated parameters for the SEIR model.
 
-% <==============================================================================>
-% <============================== ODE model =====================================>
-% <==============================================================================>
+model.fc = @SEIR1;           % Name of the model function
+model.name = 'SEIR model';   % Name of the ODE model
 
-model.fc=@SEIR1; % name of the model function
-model.name='SEIR model';   % string indicating the name of the ODE model
+% Define model parameters:
+params.label = {'\beta', '\kappa', '\gamma', 'N'}; % Symbols for model parameters
+params.LB = [0.01, 0.01, 0.01, 20];              % Lower bounds for parameter estimates
+params.UB = [10, 2, 2, 1000000];                 % Upper bounds for parameter estimates
+params.initial = [0.6, 1/1.9, 1/4.1, 550000];    % Initial guesses for parameter values
+params.fixed = [0, 1, 1, 1];                     % Boolean vector to fix parameters (1) or estimate (0)
+params.fixI0 = 1;                                % Fix initial value of fitting variable to first observation (1 = yes, 0 = no)
+params.composite = @R0s;                         % Function to estimate composite parameter (e.g., R_0)
+params.composite_name = 'R_0';                   % Name of the composite parameter
+params.extra0 = [];                              % Placeholder for additional parameters
 
-params.label={'\beta','\kappa','\gamma','N'};  % list of symbols to refer to the model parameters
-params.LB=[0.01 0.01 0.01 20]; % lower bound values of the parameter estimates
-params.UB=[10 2 2 1000000]; % upper bound values of the parameter estimates
-params.initial=[0.6 1/1.9 1/4.1 550000]; % initial parameter values/guesses
-params.fixed=[0 1 1 1]; % Boolean vector to indicate any parameters that should remain fixed (1) to initial values indicated in params.initial. Otherwise the parameter is estimated (0).
-params.fixI0=1; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters (0).
-params.composite=@R0s;  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
-params.composite_name='R_0'; % Name of the composite parameter
-params.extra0=[];
+% Define model variables:
+vars.label = {'S', 'E', 'I', 'R', 'C'};             % Symbols for model variables
+vars.initial = [params.initial(4) - 4, 0, 4, 0, 4]; % Initial conditions for model variables
+vars.fit_index = 5;                                 % Index of the variable to fit to observed data
+vars.fit_diff = 1;                                  % Fit the derivative of the fitting variable (1 = yes, 0 = no)
 
-vars.label={'S','E','I','R','C'}; % list of symbols to refer to the variables included in the model
-vars.initial=[params.initial(4)-4 0 4 0 4];  % vector of initial conditions for the model variables
-vars.fit_index=5; % index of the model's variable that will be fit to the observed time series data
-vars.fit_diff=1; % boolean variable to indicate if the derivative of model's fitting variable should be fit to data.
+% <============================================================================>
+% <======= Parameters for Rolling Window Analysis ===========================>
+% <============================================================================>
+% Settings for rolling window analysis.
 
-% <==================================================================================>
-% <========================== Parameters of the rolling window analysis =========================>
-% <==================================================================================>
+windowsize1 = 17; % Size of the moving window (e.g., 17 time units)
+tstart1 = 1;      % Start time point for rolling window analysis
+tend1 = 1;        % End time point for rolling window analysis
+printscreen1 = 1; % Boolean: Print results to screen (1 = yes, 0 = no)
 
-windowsize1=17;  % moving window size
-
-tstart1=1; % time point for the start of rolling window analysis
-
-tend1=1;  %time point for the end of the rolling window analysis
-
-printscreen1=1;
-
+end
