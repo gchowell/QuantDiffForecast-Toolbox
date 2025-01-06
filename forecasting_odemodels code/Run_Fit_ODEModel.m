@@ -114,8 +114,6 @@ else
     error('File "%s" not found in the specified directory.', fullFilePath);
 end
 
-
-
 if isempty(data)
     error('The dataset is empty')
 end
@@ -354,6 +352,8 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     Phatss_model1=zeros(M,params.num+length(vars.fit_index)+2);
 
+    fvals_model1=zeros(M,1);
+
     f_model1_sims=[];
 
     for j=1:M
@@ -396,12 +396,17 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         Phatss_model1(j,:)=P_model1;
 
+        fvals_model1(j,1)= fval;
 
     end %end bootstrapping loop
+
 
     data1=[timevect1 data1(:,2:end)];
 
     datalatest=data(i:end,1:end);
+
+    save(strcat('./output/bootstraps-ODEModel-',cadfilename1,'-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat'),'Phatss_model1','fvals_model1','-mat')
+    
 
     'bootstrapping completed'
 
@@ -576,7 +581,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         quantilesfs=[quantilesfs;quantilesf];
 
-         save(strcat('./output/Forecast-ODEModel-',cadfilename1,'-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat'),'-mat')
+        save(strcat('./output/Forecast-ODEModel-',cadfilename1,'-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat'),'-mat')
 
 
 
@@ -695,9 +700,63 @@ for i=tstart1:1:tend1  %rolling window analysis
     end
 
 
-    cc1=cc1+1;
-
     paramss=[paramss;params1];
+
+    % <=======================================================================================>
+    % <======================= Plot neg. loglikelihood profiles of the parameters =============>
+    % <========================================================================================>
+
+    if printscreen1
+        figure(400+i*20+j)
+    end
+
+
+    for j=1:params.num
+
+        if printscreen1
+
+            subplot(1,params.num,j)
+
+            profile1=sortrows([Phatss_model1(:,j) fvals_model1],1);
+
+            plot(profile1(:,1),profile1(:,2),'bo')
+            hold on
+
+            % Apply interpolation
+            if params.fixed(j)==0
+
+                span = 0.15; % Fraction of data used for local smoothing (adjust as needed)
+                y_smooth = smooth(profile1(:,1),profile1(:,2),span, 'loess');
+
+                %x_interp=linspace(profile1(1,1),profile1(end,1),100);
+                %y_interp1 = interp1(profile1(:,1),profile1(:,2),x_interp);
+
+                plot(profile1(:,1),y_smooth, '-r', 'LineWidth', 2); % Smoothed curve
+            end
+
+        end
+
+
+        if isempty(params.label)
+            xlabel(strcat('param(',num2str(j),')'))
+            cad1=strcat('param(',num2str(j),')=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
+        else
+            xlabel(params.label(j))
+            cad1=strcat(cell2mat(params.label(j)),'=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
+        end
+
+        if printscreen1
+            ylabel('Objective function')
+
+            title(cad1)
+
+            set(gca,'FontSize', GetAdjustedFontSize);
+            set(gcf,'color','white')
+        end
+
+    end
+
+ cc1=cc1+1;
 
 end % rolling window analysis
 
@@ -706,7 +765,7 @@ end % rolling window analysis
 
 if vars.num>1
 
-    figure(400)
+    figure(500)
 
     factor1=factor(vars.num);
 

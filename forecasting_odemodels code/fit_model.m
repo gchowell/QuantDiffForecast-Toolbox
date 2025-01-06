@@ -103,8 +103,13 @@ end
 f = @parameterSearchODE;
 
 % Set optimization options for fmincon
-options = optimoptions('fmincon', 'Algorithm', 'sqp', 'StepTolerance', 1e-6, ...
-                       'MaxFunEvals', 10000, 'MaxIter', 10000);
+options = optimoptions('fmincon', ...
+    'Algorithm', 'sqp', ...  % sqp, interior-point
+    'StepTolerance', 1e-4, ... % Slightly relaxed
+    'FunctionTolerance', 1e-4, ... 
+    'OptimalityTolerance', 1e-4, ...
+    'MaxFunEvals', 10000, ...
+    'MaxIter', 10000);
 
 % Define the optimization problem
 problem = createOptimProblem('fmincon', 'objective', f, 'x0', z, ...
@@ -122,7 +127,7 @@ flagg = -1;
 % Run optimization until a stopping condition is met
 while flagg < 0
     initialguess = [];
-    
+
     % Add random start points if specified
     if numstartpoints > 0
         rpoints = RandomStartPointSet('NumStartPoints', numstartpoints);
@@ -132,9 +137,10 @@ while flagg < 0
         allpts = {tpoints};
         initialguess = [initialguess; z];
     end
-    
+
     % Run the MultiStart solver
     [P, fval, flagg, outpt, allmins] = run(ms, problem, allpts);
+
 end
 
 % P is the vector with the estimated parameters
@@ -225,8 +231,4 @@ else
     % Assign the compiled forecast data as the final forecast curve
     forecastcurve = yforecast;
 end
-
-
-% subplot(1,2,2)
-% plot(forecastcurve,'r')
 

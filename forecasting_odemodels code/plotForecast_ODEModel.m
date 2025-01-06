@@ -620,9 +620,62 @@ for i=tstart1:1:tend1  %rolling window analysis
         paramslabels1(1+(j+1+length(vars.fit_index))*3:(j+2+length(vars.fit_index))*3)={strcat('d'), strcat('d_95%CI LB'), strcat('d_95%CI UB')};
     end
 
+    paramss=[paramss;params1];
+
+    % <=======================================================================================>
+    % <======================= Plot neg. loglikelihood profiles of the parameters =============>
+    % <========================================================================================>
+
+    if printscreen1
+        figure(400+i*20+j)
+    end
+
+    for j=1:params.num
+
+        if printscreen1
+
+            subplot(1,params.num,j)
+
+            profile1=sortrows([Phatss_model1(:,j) fvals_model1],1);
+
+            plot(profile1(:,1),profile1(:,2),'bo')
+            hold on
+
+            % Apply interpolation
+            if params.fixed(j)==0
+
+                span = 0.15; % Fraction of data used for local smoothing (adjust as needed)
+                y_smooth = smooth(profile1(:,1),profile1(:,2),span, 'loess');
+
+                %x_interp=linspace(profile1(1,1),profile1(end,1),100);
+                %y_interp1 = interp1(profile1(:,1),profile1(:,2),x_interp);
+
+                plot(profile1(:,1),y_smooth, '-r', 'LineWidth', 2); % Smoothed curve
+            end
+
+        end
+
+        if isempty(params.label)
+            xlabel(strcat('param(',num2str(j),')'))
+            cad1=strcat('param(',num2str(j),')=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
+        else
+            xlabel(params.label(j))
+            cad1=strcat(cell2mat(params.label(j)),'=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
+        end
+
+        if printscreen1
+            ylabel('Objective function')
+
+            title(cad1)
+
+            set(gca,'FontSize', GetAdjustedFontSize);
+            set(gcf,'color','white')
+        end
+
+    end
+
     cc1=cc1+1;
 
-    paramss=[paramss;params1];
 
 end % rolling window analysis
 
