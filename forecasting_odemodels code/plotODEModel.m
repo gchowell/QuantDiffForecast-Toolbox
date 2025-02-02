@@ -1,4 +1,8 @@
-function Ys=plotODEModel(options_pass,windowsize1_pass)
+function [Ys,curves]=plotODEModel(options_pass,windowsize1_pass)
+
+% <============================================================================>
+% < Author: Gerardo Chowell ==================================================>
+% <============================================================================>
 
 close all
 
@@ -72,7 +76,9 @@ params=params_INP;
 vars=vars_INP;
 
 for j=1:params.num
+    j
     if params.initial(j)<params.LB(j) | params.initial(j)>params.UB(j)
+        j
         error('values in <params.initial> should lie within their parameter bounds defined by <params.LB> and <params.UB> ')
     end
 end
@@ -139,7 +145,7 @@ for x=1:length(vars.fit_index)
 
         for i=1:params.num
 
-            if params.fixed(i)
+            if params.fixed(i) || j==1
                 param1=[param1;params.initial(i)];
 
             else
@@ -273,6 +279,9 @@ factor1=factor(vars.num);
 if length(factor1)==1
     rows1=1;
     cols1=factor1;
+elseif length(factor1)>2
+    rows1=factor1(1)*factor1(2);
+    cols1=factor1(3);
 else
     rows1=factor1(1);
     cols1=factor1(2);
@@ -306,7 +315,7 @@ for j=1:1:cols1
 end
 
 
-if 0
+if 1
 
     % <===============================================================================================================>
     % <=========================== Generate simulated data with a given error structure ===============================>
@@ -321,13 +330,23 @@ if 0
     %dist1=4; % MLE (Neg Binomial) with VAR=mean+alpha*mean^2 (method1=4)
     %dist1=5; % MLE (Neg Binomial)with VAR=mean+alpha*mean^d (method1=5)
 
-    figure
+    switch dist1
 
-    M=1;
+        case 0
 
-    %dist1=0; factor1=4; %Normal error structure
+          factor1=4; %Normal error structure
 
-    dist1=6; factor1=20; %Laplace error structure
+        case 3
+
+            factor1=3;
+
+        case 4
+
+            factor1=3;
+
+    end
+
+    %dist1=6; factor1=20; %Laplace error structure
 
     %dist1=1;
     %factor1=1;
@@ -343,19 +362,19 @@ if 0
             fitcurve=F(:,vars.fit_index(j));
         end
 
-        curve_noise=AddErrorStructure(cumsum(fitcurve),M,dist1,factor1,d)
+        curve_noise=AddErrorStructure(cumsum(fitcurve),1,dist1,factor1,d)
 
         curves=[curves curve_noise];
     end
 
     curves=max(curves,0);
 
-    plot(timevect,curves)
-    hold on
+    %plot(timevect,curves)
+    %hold on
 
     curves=[timevect curves]
 
-    save(strcat('./input/curve-',model.name,'-M-',num2str(M),'-dist1-',num2str(dist1),'-factor1-',num2str(factor1),'.txt'),'curves','-ascii')
+    %save(strcat('./input/curve-',model.name,'-M-',num2str(M),'-dist1-',num2str(dist1),'-factor1-',num2str(factor1),'.txt'),'curves','-ascii')
 
 end
 
