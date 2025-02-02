@@ -76,9 +76,7 @@ params=params_INP;
 vars=vars_INP;
 
 for j=1:params.num
-    j
     if params.initial(j)<params.LB(j) | params.initial(j)>params.UB(j)
-        j
         error('values in <params.initial> should lie within their parameter bounds defined by <params.LB> and <params.UB> ')
     end
 end
