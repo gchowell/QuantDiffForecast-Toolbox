@@ -500,6 +500,16 @@ for i=tstart1:1:tend1  %rolling window analysis
             subplot(1,params.num,j)
             hist(Phatss_model1(:,j))
             hold on
+
+            [counts, edges]=hist(Phatss_model1(:,j));
+
+            %save parameter histogram
+            T = table(round(edges(:),4), counts(:), 'VariableNames', {'BinEdges', 'Counts'});
+
+            strcat('./output/',params.label(j),'-histogram-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv')
+
+            writetable(T,strcat('./output/',cell2mat(params.label(j)),'-histogram-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'));
+
         end
 
         %line2=[param_estims(j,2,cc1)  10;param_estims(j,3,cc1)  10];
