@@ -344,7 +344,9 @@ for i=tstart1:1:tend1  %rolling window analysis
     % <======= Derive parameter uncertainty of the best fitting models and save results ================================>
     % <===========================================================================================>
 
-    'bootstrapping..'
+    %'bootstrapping..'
+    fprintf('Bootstrapping for tstart = %d\n', i);
+
 
     fit_model1=[];
     forecast_model1=[];
@@ -498,8 +500,9 @@ for i=tstart1:1:tend1  %rolling window analysis
         figure(100+i*20+j)
 
         if printscreen1
-            %subplot(2,params.num,[params.num+1:1:params.num*2])
 
+            tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
+            nexttile(1)
             plot(timevect2,forecast2,'c')
             hold on
 
@@ -636,15 +639,17 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if printscreen1
         figure(300+i*20+j)
+        tiledlayout(1,params.num, 'Padding', 'compact', 'TileSpacing', 'compact')
     end
 
     params1=[];
     paramslabels1=cell(1,(params.num)*3);
 
+
     for j=1:params.num
 
         if printscreen1
-            subplot(1,params.num,j)
+            nexttile(j)
             hist(Phatss_model1(:,j))
             hold on
 
@@ -715,14 +720,14 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if printscreen1
         figure(400+i*20+j)
+        tiledlayout(1,params.num, 'Padding', 'compact', 'TileSpacing', 'compact')
     end
 
 
     for j=1:params.num
 
         if printscreen1
-
-            subplot(1,params.num,j)
+            nexttile(j)
 
             profile1=sortrows([Phatss_model1(:,j) fvals_model1],1);
 
@@ -759,6 +764,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
             set(gca,'FontSize', GetAdjustedFontSize);
             set(gcf,'color','white')
+
         end
 
     end
@@ -769,6 +775,7 @@ end % rolling window analysis
 
 
 %% plot all state variables in a figure
+
 
 if vars.num>1
 
@@ -788,11 +795,13 @@ if vars.num>1
         cols1=factor1(2);
     end
 
+    tiledlayout(rows1,cols1, 'Padding', 'compact', 'TileSpacing', 'compact')
+
     cc1=1;
 
     for i2=1:1:vars.num
 
-        subplot(rows1,cols1,cc1)
+        nexttile(cc1)
         %for j=1:M
         plot(quantile(cell2mat(Ys(i2,:,:))',0.5),'k-')
         hold on
@@ -809,7 +818,7 @@ if vars.num>1
     end
 
     for j=1:1:cols1
-        subplot(rows1,cols1,rows1*cols1-cols1+j)
+        nexttile(rows1*cols1-cols1+j)
         xlabel('Time')
     end
 end
@@ -879,4 +888,3 @@ writetable(T,strcat('./output/parameters-composite-model_name-',model.name,'-fix
 T = array2table(AICcs);
 T.Properties.VariableNames(1:5) = {'time','AICc','AICc part1','AICc part2','numparams'};
 writetable(T,strcat('./output/AICc-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
-

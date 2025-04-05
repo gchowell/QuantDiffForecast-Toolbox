@@ -537,7 +537,9 @@ for i=tstart1:1:tend1  %rolling window analysis
         figure(100+i*20+j)
 
         if printscreen1
-            %subplot(2,params.num,[params.num+1:1:params.num*2])
+
+            tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
+            nexttile(1)
 
             plot(timevect2,forecast2,'c')
             hold on
@@ -604,7 +606,8 @@ for i=tstart1:1:tend1  %rolling window analysis
             if forecastingperiod>0
                 figure(200+i*20+j)
 
-                subplot(2,2,1)
+                tiledlayout(2,2,'Padding', 'compact', 'TileSpacing', 'compact')
+                nexttile(1)
 
                 line1=plot(MAEFS_model1(:,1),MAEFS_model1(:,2),'k-o')
                 set(line1,'LineWidth',4)
@@ -620,7 +623,7 @@ for i=tstart1:1:tend1  %rolling window analysis
                 set(gca,'FontSize',GetAdjustedFontSize);
                 set(gcf,'color','white')
 
-                subplot(2,2,2)
+                nexttile(2)
 
                 line1=plot(MSEFS_model1(:,1),MSEFS_model1(:,2),'k-o')
                 set(line1,'LineWidth',4)
@@ -631,7 +634,7 @@ for i=tstart1:1:tend1  %rolling window analysis
                 set(gca,'FontSize',GetAdjustedFontSize);
                 set(gcf,'color','white')
 
-                subplot(2,2,3)
+                nexttile(3)
 
                 line1=plot(PIFS_model1(:,1),PIFS_model1(:,2),'k-o')
                 set(line1,'LineWidth',4)
@@ -642,8 +645,7 @@ for i=tstart1:1:tend1  %rolling window analysis
                 set(gca,'FontSize',GetAdjustedFontSize);
                 set(gcf,'color','white')
 
-
-                subplot(2,2,4)
+                nexttile(4)
 
                 line1=plot(WISFS_model1(:,1),WISFS_model1(:,2),'k-o')
                 set(line1,'LineWidth',4)
@@ -756,6 +758,8 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if printscreen1
         figure(300+i*20+j)
+        tiledlayout(1,params.num,'Padding', 'compact', 'TileSpacing', 'compact')
+
     end
 
     params1=[];
@@ -764,7 +768,7 @@ for i=tstart1:1:tend1  %rolling window analysis
     for j=1:params.num
 
         if printscreen1
-            subplot(1,params.num,j)
+            nexttile(j)
             hist(Phatss_model1(:,j))
             hold on
 
@@ -834,13 +838,15 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if printscreen1
         figure(400+i*20+j)
+        tiledlayout(1,params.num,'Padding', 'compact', 'TileSpacing', 'compact')
+
     end
 
     for j=1:params.num
 
         if printscreen1
 
-            subplot(1,params.num,j)
+            nexttile(j)
 
             profile1=sortrows([Phatss_model1(:,j) fvals_model1],1);
 
@@ -908,9 +914,11 @@ if vars.num>1
 
     cc1=1;
 
+     tiledlayout(rows1,cols1,'Padding', 'compact', 'TileSpacing', 'compact')
+
     for i2=1:1:vars.num
 
-        subplot(rows1,cols1,cc1)
+        nexttile(cc1)
         %for j=1:M
         plot(quantile(cell2mat(Ys(i2,:,:))',0.5),'k-')
         hold on
@@ -927,7 +935,7 @@ if vars.num>1
     end
 
     for j=1:1:cols1
-        subplot(rows1,cols1,rows1*cols1-cols1+j)
+        nexttile(rows1*cols1-cols1+j)
         xlabel('Time')
     end
 end

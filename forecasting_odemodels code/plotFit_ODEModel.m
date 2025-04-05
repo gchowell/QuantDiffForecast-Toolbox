@@ -305,7 +305,10 @@ for i=tstart1:1:tend1  %rolling window analysis
         if printscreen1
             %subplot(2,params.num,[params.num+1:1:params.num*2])
 
-            plot(timevect2,forecast2,'c')
+           tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
+           nexttile(1)
+           
+           plot(timevect2,forecast2,'c')
             hold on
 
             % plot 95% PI
@@ -458,6 +461,8 @@ for i=tstart1:1:tend1  %rolling window analysis
         composite=[median(compositetemp) quantile(compositetemp,0.025) quantile(compositetemp,0.975)];
 
         figure(150+i*20+j)
+        tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
+        nexttile(1)
 
         if isempty(params.composite_name)==1
 
@@ -489,6 +494,8 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if printscreen1
         figure(300+i*20+j)
+        tiledlayout(1,params.num,'Padding', 'compact', 'TileSpacing', 'compact')
+
     end
 
     params1=[];
@@ -497,7 +504,7 @@ for i=tstart1:1:tend1  %rolling window analysis
     for j=1:params.num
 
         if printscreen1
-            subplot(1,params.num,j)
+            nexttile(j)
             hist(Phatss_model1(:,j))
             hold on
 
@@ -569,12 +576,13 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if printscreen1
         figure(400+i*20+j)
+        tiledlayout(1,params.num,'Padding', 'compact', 'TileSpacing', 'compact')
     end
 
     for j=1:params.num
 
         if printscreen1
-            subplot(1,params.num,j)
+            nexttile(j)
 
             profile1=sortrows([Phatss_model1(:,j) fvals_model1],1);
 
@@ -624,7 +632,6 @@ end % rolling window analysis
 if vars.num>1
 
     figure(500)
-
     factor1=factor(vars.num);
 
     if length(factor1)>2
@@ -641,9 +648,11 @@ if vars.num>1
 
     cc1=1;
 
+    tiledlayout(rows1,cols1, 'Padding', 'compact', 'TileSpacing', 'compact')
+
     for i2=1:1:vars.num
 
-        subplot(rows1,cols1,cc1)
+        nexttile(cc1)
         %for j=1:M
         plot(quantile(cell2mat(Ys(i2,:,:))',0.5),'k-')
         hold on
@@ -660,7 +669,7 @@ if vars.num>1
     end
 
     for j=1:1:cols1
-        subplot(rows1,cols1,rows1*cols1-cols1+j)
+         nexttile(rows1*cols1-cols1+j)
         xlabel('Time')
     end
 end

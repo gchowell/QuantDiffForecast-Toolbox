@@ -1,10 +1,7 @@
-function [Ys,curves]=plotODEModel(options_pass,windowsize1_pass)
-
-% <============================================================================>
-% < Author: Gerardo Chowell ==================================================>
-% <============================================================================>
+function [Ys,curves]=Run_simulate_ODEModel(options_pass,factor1)
 
 close all
+
 % <============================================================================>
 % <=================== Declare global variables ===============================>
 % <============================================================================>
@@ -19,11 +16,12 @@ if exist('options_pass','var')==1 && isempty(options_pass)==0
 
     options1=options_pass;
 
-    [cadfilename1_INP,caddisease_INP,datatype_INP, dist1_INP, numstartpoints_INP,M_INP, model_INP, params_INP, vars_INP, windowsize1_INP, tstart1_INP, tend1_INP, printscreen1_INP]=options1();
+    [cadfilename1_INP,caddisease_INP,datatype_INP, dist1_INP, numstartpoints_INP,M_INP, model_INP, params_INP, vars_INP, getperformance_INP,forecastingperiod_INP,windowsize1_INP,tstart1_INP,tend1_INP,printscreen1_INP]=options1();
 
 else
 
-    [cadfilename1_INP,caddisease_INP,datatype_INP, dist1_INP, numstartpoints_INP,M_INP, model_INP, params_INP, vars_INP, windowsize1_INP,tstart1_INP,tend1_INP,printscreen1_INP]=options_fit;
+   [cadfilename1_INP,caddisease_INP,datatype_INP, dist1_INP, numstartpoints_INP,M_INP, model_INP, params_INP, vars_INP, getperformance_INP,forecastingperiod_INP,windowsize1_INP,tstart1_INP,tend1_INP,printscreen1_INP]=options_forecast;
+
 
 end
 
@@ -63,7 +61,7 @@ dist1=dist1_INP; %Define dist1 which is the type of error structure:
 
 numstartpoints=numstartpoints_INP; % Number of initial guesses for optimization procedure using MultiStart
 
-M=M_INP; % number of bootstrap realizations to characterize parameter uncertainty
+M=1; % number of bootstrap realizations to characterize parameter uncertainty
 
 
 % <==============================================================================>
@@ -85,43 +83,16 @@ if length(params.label)~=params.num | length(params.fixed)~=params.num | length(
 end
 
 
-if exist('windowsize1_pass','var')==1 & isempty(windowsize1_pass)==0
+getperformance=getperformance_INP;
+forecastingperiod=forecastingperiod_INP;
 
-    windowsize1=windowsize1_pass;
-else
-    windowsize1=windowsize1_INP;
-end
+windowsize1=windowsize1_INP;
 
 printscreen1=printscreen1_INP;
 
 
-% <==============================================================================>
-% <======================== Load epidemic data ========================================>
-% <==============================================================================>
 
-% Check if fileName ends with '.txt'
-if ~endsWith(cadfilename1, '.txt', 'IgnoreCase', true)
-    % Append '.txt' extension if not present
-    cadfilename1 = strcat(cadfilename1, '.txt');
-end
-
-
-if isfile(strcat('./input/',cadfilename1,'.txt'))
-    % File exists.
-    data=load(strcat('./input/',cadfilename1,'.txt'));
-
-    data=data(1:1:windowsize1,:);
-
-else
-    % File does not exist.
-    data=[(0:1:windowsize1-1)' zeros(windowsize1,length(vars.fit_index))];
-end
-
-figure
-
-% solve model numerically
-%timevect=tstart1:1:tstart1+windowsize1-1;
-timevect=data(:,1);
+timevect=(0:1:windowsize1-1)';
 
 options=[];
 IC=vars.initial;
@@ -135,8 +106,6 @@ for x=1:length(vars.fit_index)
 
     SSEs=[];
 
-    tiledlayout(length(vars.fit_index),2,'Padding', 'compact', 'TileSpacing', 'compact')
-
     for j=1:M
 
         param1=[];
@@ -147,6 +116,7 @@ for x=1:length(vars.fit_index)
                 param1=[param1;params.initial(i)];
 
             else
+                'entro'
                 param1=[param1;unifrnd(params.LB(i),params.UB(i))];
             end
 
@@ -157,7 +127,9 @@ for x=1:length(vars.fit_index)
         else
             composite1=[composite1;params.composite(param1')];
         end
- 
+      
+        IC
+
         [~,F]=ode15s(model.fc,timevect,IC,options,param1,params.extra0);
 
         F=real(F);
@@ -174,119 +146,29 @@ for x=1:length(vars.fit_index)
             fitcurve=F(:,vars.fit_index(x));
         end
 
-        nexttile(cc1)
-        % plot the fitting variable
-        line1=plot(timevect,fitcurve,'b-');
-        hold on
-        nexttile(cc1+1)
-        line1=plot(timevect,fitcurve,'b-');
-        hold on
-        curvess=[curvess fitcurve];
-
-        % compute SSE across curves
-        SSEs=[SSEs;sum((fitcurve-data(:,x+1)).^2)];
-
     end
-
-    [min1,index1]=min(SSEs);
-
-    nexttile(cc1)    % plot the fitting variable
-    line1=plot(timevect,curvess(:,index1),'g-');
-    set(line1,'LineWidth',4)
-    hold on
-    nexttile(cc1+1)
-    line1=plot(timevect,curvess(:,index1),'g-');
-    set(line1,'LineWidth',4)
-
-    nexttile(cc1)
-    xlabel('Time')
-
-    if vars.fit_diff(x)
-        ylabel(strcat(vars.label(vars.fit_index(x)),'''(t)',{' '}))
-    else
-        ylabel(strcat(vars.label(vars.fit_index(x)),'(t)',{' '}))
-    end
-
-    nexttile(cc1+1)
-    xlabel('Time')
-    if vars.fit_diff(x)
-        ylabel(strcat(vars.label(vars.fit_index(x)),'''(t)',{' '}))
-    else
-        ylabel(strcat(vars.label(vars.fit_index(x)),'(t)',{' '}))
-    end
-
-    %subplot(1,2,1)
-    %line1=plot(timevect,median(curvess,2),'k--')
-    %set(line1,'LineWidth',3)
-    %subplot(1,2,2)
-    %line1=plot(timevect,median(curvess,2),'k--')
-    %set(line1,'LineWidth',3)
-
-    % plot time series data
-
-    nexttile(cc1)
-    line1=plot(data(:,1),data(:,x+1),'ro');
-    set(line1,'markersize',6,'LineWidth',2)
-    axis([data(1,1) data(end,1) 0 max(max(curvess))+5])
-
-    nexttile(cc1+1)
-    line1=plot(data(:,1),data(:,x+1),'ro');
-    set(line1,'markersize',6,'LineWidth',2)
-    axis([data(1,1) data(end,1) 0 max(data(:,x+1))+5])
-
-    nexttile(cc1)
-    set(gca,'FontSize',GetAdjustedFontSize);
-    set(gcf,'color','white')
-
-    nexttile(cc1+1)
-    set(gca,'FontSize',GetAdjustedFontSize);
-    set(gcf,'color','white')
-    title('zoomed')
 
     cc1=cc1+2;
 
 end
 
 
-% plot the empirical distribution of the composite parameter
-
-if isempty(params.composite)==0
-
-    figure
-    tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
-
-    composite=[median(composite1) quantile(composite1,0.025) quantile(composite1,0.975)]
-
-    cad1=strcat('\it{',params.composite_name,'}=',num2str(composite(end,1),4),' (95%CI:',num2str(composite(end,2),4),',',num2str(composite(end,3),4),')')
-    hist(composite1)
-    ylabel('Frequency')
-    xlabel(params.composite_name)
-    title(cad1)
-
-    set(gca,'FontSize',GetAdjustedFontSize);
-    set(gcf,'color','white')
-
-end
-
 
 %% plot all state variables in a figure
 
 figure
 
-factor1=factor(vars.num);
+factor2=factor(vars.num);
 
-if length(factor1)==1
+if length(factor2)==1
     rows1=1;
-    cols1=factor1;
-elseif length(factor1)>2
-    rows1=factor1(1)*factor1(2);
-    cols1=factor1(3);
+    cols1=factor2;
 else
-    rows1=factor1(1);
-    cols1=factor1(2);
+    rows1=factor2(1);
+    cols1=factor2(2);
 end
 
- tiledlayout(rows1,cols1,'Padding', 'compact', 'TileSpacing', 'compact')
+tiledlayout(rows1,cols1,'Padding', 'compact', 'TileSpacing', 'compact')
 
 cc1=1;
 for i=1:1:vars.num
@@ -335,7 +217,7 @@ if 1
 
         case 0
 
-          factor1=4; %Normal error structure
+            factor1=4; %Normal error structure
 
         case 3
 
@@ -355,6 +237,25 @@ if 1
     d=1;
 
     curves=[];
+
+    figure
+
+    factor2=length(vars.fit_index);
+
+    if isscalar(factor2)
+        rows1=1;
+        cols1=factor2;
+    elseif length(factor2)>2
+        rows1=factor2(1)*factor2(2);
+        cols1=factor2(3);
+    else
+        rows1=factor2(1);
+        cols1=factor2(2);
+    end
+    
+    tiledlayout(rows1,cols1,'Padding', 'compact', 'TileSpacing', 'compact')
+
+
     for j=1:length(vars.fit_index)
         [~,F]=ode15s(model.fc,timevect,IC,options,params.initial,params.extra0);
         if vars.fit_diff(j)==1
@@ -366,12 +267,23 @@ if 1
         curve_noise=AddErrorStructure(cumsum(fitcurve),1,dist1,factor1,d)
 
         curves=[curves curve_noise];
+
+        nexttile(j)
+        plot(timevect,max(curve_noise,0),'ko')
+        xlabel('Time')
+
+        if vars.fit_diff(j)==1
+            ylabel(strcat(vars.label(vars.fit_index(j)),''''))
+        else
+            ylabel(vars.label(vars.fit_index(j)))
+        end
+
+          set(gca,'FontSize',GetAdjustedFontSize);
+          set(gcf,'color','white')
+
     end
 
     curves=max(curves,0);
-
-    %plot(timevect,curves)
-    %hold on
 
     curves=[timevect curves]
 

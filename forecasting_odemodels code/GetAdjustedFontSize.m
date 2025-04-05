@@ -1,16 +1,19 @@
 
 function adjustedFontSize=GetAdjustedFontSize()
 
-% Retrieve screen DPI
-screenSize = get(0, 'ScreenSize');
+% === Retrieve screen DPI and size ===
 screenDPI = get(0, 'ScreenPixelsPerInch');
+screenSize = get(0, 'ScreenSize');  % [left, bottom, width, height]
 
-% Define a base font size (this is a font size that looks good on a standard 96 DPI screen)
-baseFontSize = 24;
+% === Define base values ===
+baseDPI = 96;              % Standard DPI for which baseFontSize is designed
+baseFontSize = 24;         % Ideal font size for base DPI
+maxFontSize = 24;          % Upper limit to avoid oversized fonts
+minFontSize = 10;          % Lower limit for legibility
 
-% Calculate scaling factor based on DPI (assuming base DPI is 96)
-baseDPI = 96;
+% === Scale font size according to screen DPI ===
 scalingFactor = screenDPI / baseDPI;
+adjustedFontSize = round(baseFontSize * scalingFactor);
 
-% Calculate adjusted font size
-adjustedFontSize = min(baseFontSize * scalingFactor,24);
+% === Clamp the font size to a reasonable range ===
+adjustedFontSize = min(max(adjustedFontSize, minFontSize), maxFontSize);
