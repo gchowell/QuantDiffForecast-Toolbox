@@ -1,9 +1,24 @@
 # QuantDiffForecast: A MATLAB Toolbox for Parameter Estimation and Forecasting with ODE Models
 
-Welcome to **QuantDiffForecast**, a MATLAB toolbox designed to estimate parameters and generate short-term forecasts with quantified uncertainty from dynamical models based on **ordinary differential equations (ODEs)**. This toolbox is user-friendly, flexible, and suitable for applications across various scientific fields, including epidemiology and population dynamics.
+# QuantDiffForecast: A MATLAB Toolbox for Parameter Estimation and Forecasting with ODE Models
 
-<p> <a href="https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036" target="_blank">QuantDiffForecast Tutorial</a></p> 
-<p><a href="https://www.youtube.com/watch?v=eyyX63H12sY&t=41s" target="_blank">Video Tutorial</a></p>
+Welcome to **QuantDiffForecast**, a MATLAB toolbox designed to estimate parameters and generate short-term forecasts with **quantified uncertainty** from dynamical models based on ordinary differential equations (ODEs). This toolbox is **user-friendly**, **flexible**, and suitable for applications across various scientific fields, including **epidemiology**, **population dynamics**, and **systems biology**.
+
+📄 **QuantDiffForecast Tutorial**: [https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036](https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036)
+
+🎥 **Video Tutorial**: [https://www.youtube.com/watch?v=eyyX63H12sY&t=41s](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)
+
+---
+
+## Features
+
+- **Parameter Estimation**: Provides methods for parameter estimation using **nonlinear least squares (NLS)** and **maximum likelihood estimation (MLE)**, with support for **bootstrapping** to assess parameter uncertainty.
+- **Forecasting**: Generates short-term forecasts with **quantified uncertainty**, allowing users to assess the reliability of model predictions.
+- **Model Selection**: Includes tools for model comparison using **Akaike Information Criterion corrected (AICc)** and **Bayesian Information Criterion (BIC)**.
+- **Visualization**: Offers functions to visualize model fits, forecasts, and uncertainty intervals, facilitating interpretation and communication of results.
+- **Extensibility**: Designed to be easily extendable to accommodate various ODE models and datasets.
+
+---
 
 ## Features
 
