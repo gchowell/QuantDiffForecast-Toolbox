@@ -650,6 +650,19 @@ if vars.num>1
 
     tiledlayout(rows1,cols1, 'Padding', 'compact', 'TileSpacing', 'compact')
 
+    vars.num
+
+    dataTable=[];
+    varslabels1=cell(1,(vars.num)*3+1);
+
+    pause
+
+    varslabels1(1)={'time'};
+    dataTable=[timevect2]
+
+    pause
+
+
     for i2=1:1:vars.num
 
         nexttile(cc1)
@@ -660,6 +673,12 @@ if vars.num>1
         plot(quantile(cell2mat(Ys(i2,:,:))',0.975),'k--')
         %end
 
+        dataTable=[dataTable [quantile(cell2mat(Ys(i2,:,:))',0.5)' quantile(cell2mat(Ys(i2,:,:))',0.025)' quantile(cell2mat(Ys(i2,:,:))',0.975)']]
+
+        varslabels1((i2-1)*3+2)=append({'median '},vars.label(i2));
+        varslabels1((i2-1)*3+3)=append({'95% LB '},vars.label(i2));
+        varslabels1((i2-1)*3+4)=append({'95% UB '},vars.label(i2));
+
         title(vars.label(i2))
         set(gca,'FontSize',GetAdjustedFontSize);
         set(gcf,'color','white')
@@ -669,9 +688,15 @@ if vars.num>1
     end
 
     for j=1:1:cols1
-         nexttile(rows1*cols1-cols1+j)
+        nexttile(rows1*cols1-cols1+j)
         xlabel('Time')
     end
+
+    T = array2table(dataTable);
+    T.Properties.VariableNames(1:vars.num*3+1) = varslabels1;
+    writetable(T,strcat('./output/StateVars-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
+
 end
 
 %%
