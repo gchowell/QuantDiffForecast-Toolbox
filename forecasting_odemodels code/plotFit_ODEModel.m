@@ -650,17 +650,11 @@ if vars.num>1
 
     tiledlayout(rows1,cols1, 'Padding', 'compact', 'TileSpacing', 'compact')
 
-    vars.num
-
     dataTable=[];
     varslabels1=cell(1,(vars.num)*3+1);
 
-    pause
-
     varslabels1(1)={'time'};
     dataTable=[timevect2]
-
-    pause
 
 
     for i2=1:1:vars.num
