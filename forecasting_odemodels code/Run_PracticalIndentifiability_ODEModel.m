@@ -153,16 +153,19 @@ for j=1:replicates1
     plot(simulation(:,1),simulation(:,2:end),'r-')
 
 
-    % Check if fileName ends with '.txt'
-    if ~endsWith(cadfilename1, '.txt', 'IgnoreCase', true)
-        % Append '.txt' extension if not present
-        cadfilename1 = strcat(cadfilename1, '.txt');
+    [~, baseName, ext] = fileparts(cadfilename1);
+    if isempty(ext) || ~strcmpi(ext, '.txt')
+        cadfilename1 = [baseName, '.txt'];
+    else
+        cadfilename1 = [baseName, '.txt'];  % enforce lowercase .txt
     end
 
-    % Create full file path
-    fullFilePath = fullfile('./input', cadfilename1);
+
+    %  Build platform-independent path with fullfile
+    fullFilePath = fullfile('.', 'input', cadfilename1);
 
     save(fullFilePath,'curves','-ascii')
+
 
     % Generate forecast
     Run_Forecasting_ODEModel(options,1,1,windowsize1,forecastingperiod);
@@ -178,10 +181,10 @@ for j=1:replicates1
 
         % Find estimated horizon at which the width of the 95%PI doubles
         % starting from the last data point of the calibration period
-        estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
+        %estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
 
         % Display result
-        fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
+        %fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
 
     end
 

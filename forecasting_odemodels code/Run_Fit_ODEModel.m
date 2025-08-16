@@ -96,18 +96,16 @@ end
 % <======================== Load epidemic data ========================================>
 % <==============================================================================>
 
-% Check if fileName ends with '.txt'
+% Append ".txt" only if missing
 if ~endsWith(cadfilename1, '.txt', 'IgnoreCase', true)
-    % Append '.txt' extension if not present
-    cadfilename1 = strcat(cadfilename1, '.txt');
+    cadfilename1 = char(string(cadfilename1) + ".txt");
 end
 
 % Create full file path
 fullFilePath = fullfile('./input', cadfilename1);
 
 % Check if the file exists before attempting to load
-if exist(fullFilePath, 'file') == 2
-    % Load the file
+if isfile(fullFilePath)
     data = load(fullFilePath);
 else
     % Display an error message if the file is not found
@@ -180,10 +178,8 @@ if numparams>=windowsize1*length(vars.fit_index)
 
 end
 
-if tend1<tstart1
-
-    error("tstart1 parameter should not exceed tend1")
-
+if tend1 < tstart1
+    error("tend1 parameter should not be less than tstart1")
 end
 
 

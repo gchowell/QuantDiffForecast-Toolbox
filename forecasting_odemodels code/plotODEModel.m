@@ -94,21 +94,23 @@ end
 
 printscreen1=printscreen1_INP;
 
-
 % <==============================================================================>
 % <======================== Load epidemic data ========================================>
 % <==============================================================================>
 
-% Check if fileName ends with '.txt'
-if ~endsWith(cadfilename1, '.txt', 'IgnoreCase', true)
-    % Append '.txt' extension if not present
-    cadfilename1 = strcat(cadfilename1, '.txt');
+[~, baseName, ext] = fileparts(cadfilename1);
+if isempty(ext) || ~strcmpi(ext, '.txt')
+    cadfilename1 = [baseName, '.txt'];
+else
+    cadfilename1 = [baseName, '.txt'];  % enforce lowercase .txt
 end
 
+%  Build platform-independent path with fullfile
+fullFilePath = fullfile('.', 'input', cadfilename1);
 
-if isfile(strcat('./input/',cadfilename1,'.txt'))
+if isfile(fullFilePath)
     % File exists.
-    data=load(strcat('./input/',cadfilename1,'.txt'));
+    data=load(fullFilePath);
 
     data=data(1:1:windowsize1,:);
 
