@@ -203,10 +203,16 @@ param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)
 
 if method1==3 | method1==4
     MCEs=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index)+1); % if method1==3 | method1==4
+    SCI=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index)+1); % if method1==3 | method1==4
+
 elseif method1==5
     MCEs=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index)+2);
+    SCI=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index)+2);
+
 else
     MCEs=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index));
+    SCI=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index));
+
 end
 
 
@@ -723,6 +729,8 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,j)=std(Phatss_model1(:,j))/sqrt(M);
 
+        SCI(cc1,j)=log10(param_estims(j,3,cc1)./param_estims(j,2,cc1));
+
     end
 
     for j=1:length(vars.fit_index)
@@ -731,16 +739,26 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,params.num+j)=std(Phatss_model1(:,params.num+j))/sqrt(M); %X0
 
+        SCI(cc1,params.num+j)=log10(param_estims(params.num+j,3,cc1)./param_estims(params.num+j,2,cc1));
+
     end
+
 
     param_estims(params.num+j+1,1:3,cc1) = [median(Phatss_model1(:,params.num+j+1)) quantile(Phatss_model1(:,params.num+j+1),0.025) quantile(Phatss_model1(:,params.num+j+1),0.975)];
     param_estims(params.num+j+2,1:3,cc1) = [median(Phatss_model1(:,params.num+j+2)) quantile(Phatss_model1(:,params.num+j+2),0.025) quantile(Phatss_model1(:,params.num+j+2),0.975)];
 
     if method1==3 | method1==4
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
+
+        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1)./param_estims(params.num+j+1,2,cc1));
+
     elseif method1==5
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
         MCEs(cc1,params.num+j+2)=std(Phatss_model1(:,params.num+j+2))/sqrt(M); %d
+
+        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1)./param_estims(params.num+j+1,2,cc1));
+
+        SCI(cc1,params.num+j+2)=log10(param_estims(params.num+j+2,3,cc1)./param_estims(params.num+j+2,2,cc1));
     end
 
 
@@ -1002,6 +1020,26 @@ else
 end
 
 writetable(T,strcat('./output/MCSEs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
+% <=============================================================================================>
+% <================= Save csv file with spans of CIs (SCI) from rolling window analysis ========>
+% <=============================================================================================>
+
+rollparams=[(tstart1:1:tend1)' SCI(:,1:end)];
+T = array2table(rollparams);
+
+T.Properties.VariableNames(1)={'time'};
+
+if method1==3 | method1==4  %save parameter alpha. VAR=mean+alpha*mean; VAR=mean+alpha*mean^2;
+    T.Properties.VariableNames(2:(params.num+1+length(vars.fit_index))+1) = paramslabels1(1:3:end);
+elseif method1==5   % save parameters alpha and d. VAR=mean+alpha*mean^d;
+    T.Properties.VariableNames(2:(params.num+2+length(vars.fit_index))+1) =  paramslabels1(1:3:end);
+else
+    T.Properties.VariableNames(2:(params.num+length(vars.fit_index))+1) =  paramslabels1(1:3:end);
+end
+
+writetable(T,strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
 
 % <=============================================================================================>
 % <================= Save csv file with composite parameter ===============================================>

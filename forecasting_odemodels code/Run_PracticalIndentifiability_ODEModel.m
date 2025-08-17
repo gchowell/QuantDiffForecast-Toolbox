@@ -124,6 +124,7 @@ tend1=tend1_INP;
 windowsize1=windowsize1_INP;
 printscreen1=printscreen1_INP;
 
+SCIs=[];
 
 for j=1:replicates1
 
@@ -167,8 +168,14 @@ for j=1:replicates1
     save(fullFilePath,'curves','-ascii')
 
 
-    % Generate forecast
+    % Model fit and generate forecast
     Run_Forecasting_ODEModel(options,1,1,windowsize1,forecastingperiod);
+
+    T=readtable(strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
+    T.Properties.VariableNames
+    
+    SCIs=[SCIs;[j table2array(T)]];
 
     %Read forecast and quantify change in forecast uncertainty
     for j=1:length(vars.fit_index)
@@ -181,12 +188,16 @@ for j=1:replicates1
 
         % Find estimated horizon at which the width of the 95%PI doubles
         % starting from the last data point of the calibration period
-        %estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
+        estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
 
         % Display result
-        %fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
+        fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
 
     end
 
-end
+
+end % replicates1
+
+
+SCIs
 
