@@ -86,11 +86,9 @@ end
 getperformance=getperformance_INP;
 forecastingperiod=forecastingperiod_INP;
 
-windowsize1=windowsize1_INP;
+windowsize1=windowsize1_INP+30;
 
 printscreen1=printscreen1_INP;
-
-
 
 timevect=(0:1:windowsize1-1)';
 
@@ -213,21 +211,21 @@ if 1
     %dist1=4; % MLE (Neg Binomial) with VAR=mean+alpha*mean^2 (method1=4)
     %dist1=5; % MLE (Neg Binomial)with VAR=mean+alpha*mean^d (method1=5)
 
-    switch dist1
-
-        case 0
-
-            factor1=4; %Normal error structure
-
-        case 3
-
-            factor1=3;
-
-        case 4
-
-            factor1=3;
-
-    end
+    % switch dist1
+    % 
+    %     case 0
+    % 
+    %         factor1=4; %Normal error structure
+    % 
+    %     case 3
+    % 
+    %         factor1=3;
+    % 
+    %     case 4
+    % 
+    %         factor1=3;
+    % 
+    % end
 
     %dist1=6; factor1=20; %Laplace error structure
 

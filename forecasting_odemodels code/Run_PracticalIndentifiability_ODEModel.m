@@ -105,7 +105,7 @@ end
 
 getperformance=getperformance_INP; % flag or indicator variable (1/0) to calculate forecasting performance or not
 
-if exist('forecastingperiod_pass','var')==1 & isempty(forecastingperiod_pass)==0
+if exist('forecastingperiod_pass','var')==1 && isempty(forecastingperiod_pass)==0
 
     forecastingperiod=forecastingperiod_pass; %forecast horizon (number of data points ahead)
 
@@ -125,6 +125,9 @@ windowsize1=windowsize1_INP;
 printscreen1=printscreen1_INP;
 
 SCIs=[];
+performanceCs=[];
+performanceFs=[];
+
 
 for j=1:replicates1
 
@@ -174,25 +177,42 @@ for j=1:replicates1
     T=readtable(strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
     T.Properties.VariableNames
-    
+
     SCIs=[SCIs;[j table2array(T)]];
 
+    for i=1:length(vars.fit_index)
+
+        T=readtable(strcat('./output/performance-calibration-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
+        T.Properties.VariableNames
+
+        performanceCs=[performanceCs;[j vars.fit_index(i) table2array(T)]];
+
+        T=readtable(strcat('./output/performance-forecasting-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
+        performanceFs=[performanceFs;[zeros(forecastingperiod,1)+j zeros(forecastingperiod,1)+vars.fit_index(i) table2array(T)]];
+
+    end
+
     %Read forecast and quantify change in forecast uncertainty
-    for j=1:length(vars.fit_index)
 
-        T=readtable(strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(tstart1),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'));
+    if 0
+        for j=1:length(vars.fit_index)
 
-        width_calib=T.UB(1:windowsize1)-T.LB(1:windowsize1)
+            T=readtable(strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(tstart1),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'));
 
-        width_pred=T.UB(windowsize1+1:end)-T.LB(windowsize1+1:end)
+            width_calib=T.UB(1:windowsize1)-T.LB(1:windowsize1)
 
-        % Find estimated horizon at which the width of the 95%PI doubles
-        % starting from the last data point of the calibration period
-        estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
+            width_pred=T.UB(windowsize1+1:end)-T.LB(windowsize1+1:end)
 
-        % Display result
-        fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
+            % Find estimated horizon at which the width of the 95%PI doubles
+            % starting from the last data point of the calibration period
+            estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
 
+            % Display result
+            fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
+
+        end
     end
 
 
@@ -200,4 +220,9 @@ end % replicates1
 
 
 SCIs
+performanceCs
+performanceFs
+
+
+save(strcat('./output/Results-SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.mat'),'-mat')
 

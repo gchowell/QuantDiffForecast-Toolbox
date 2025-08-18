@@ -85,7 +85,7 @@ if length(params.label)~=params.num | length(params.fixed)~=params.num | length(
 end
 
 
-if exist('windowsize1_pass','var')==1 & isempty(windowsize1_pass)==0
+if exist('windowsize1_pass','var')==1 && isempty(windowsize1_pass)==0
 
     windowsize1=windowsize1_pass;
 else
@@ -115,15 +115,22 @@ if isfile(fullFilePath)
     data=data(1:1:windowsize1,:);
 
 else
-    % File does not exist.
+    warning('File does not exist. Creating a data file with zeros.')
     data=[(0:1:windowsize1-1)' zeros(windowsize1,length(vars.fit_index))];
 end
 
+
 figure
+
+windowsize1
+
+data
 
 % solve model numerically
 %timevect=tstart1:1:tstart1+windowsize1-1;
-timevect=data(:,1);
+timevect=data(:,1)
+pause
+
 
 options=[];
 IC=vars.initial;

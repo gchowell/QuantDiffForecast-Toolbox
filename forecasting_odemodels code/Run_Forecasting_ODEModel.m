@@ -265,7 +265,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     end
 
-    if getperformance & length(data_all(:,1))<windowsize1+forecastingperiod
+    if getperformance && length(data_all(:,1))<windowsize1+forecastingperiod
 
         [length(data_all(:,1)) windowsize1+forecastingperiod]
 
