@@ -1,4 +1,4 @@
-function [Ys,curves]=Run_simulate_ODEModel(options_pass,factor1)
+function [Ys,curves]=Run_simulate_ODEModel(options_pass,windowsize1_pass,factor1)
 
 close all
 
@@ -63,6 +63,12 @@ numstartpoints=numstartpoints_INP; % Number of initial guesses for optimization 
 
 M=1; % number of bootstrap realizations to characterize parameter uncertainty
 
+if exist('windowsize1_pass','var')==1 && isempty(windowsize1_pass)==0
+
+    windowsize1=windowsize1_pass+30;
+else
+    windowsize1=windowsize1_INP+30;
+end
 
 % <==============================================================================>
 % <============================== ODE model =====================================>
@@ -85,8 +91,6 @@ end
 
 getperformance=getperformance_INP;
 forecastingperiod=forecastingperiod_INP;
-
-windowsize1=windowsize1_INP+30;
 
 printscreen1=printscreen1_INP;
 

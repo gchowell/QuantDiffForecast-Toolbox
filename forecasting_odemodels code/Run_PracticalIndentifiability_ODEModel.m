@@ -1,5 +1,5 @@
 
-function Run_PracticalIndentifiability_ODEModel(options_pass,factor1,replicates1)
+function Run_PracticalIndentifiability_ODEModel(options_pass,windowsize1_pass,factor1,replicates1)
 
 %Run_PracticalIndentifiability_ODEModel(@options_forecast_SEIR_plain_unreported_dist1_1,4,2)
 
@@ -78,6 +78,13 @@ numstartpoints=numstartpoints_INP; % Number of initial guesses for optimization 
 
 M=M_INP; % number of bootstrap realizations to characterize parameter uncertainty
 
+if exist('windowsize1_pass','var')==1 && isempty(windowsize1_pass)==0
+
+    windowsize1=windowsize1_pass;
+else
+    windowsize1=windowsize1_INP;
+end
+
 
 % <==============================================================================>
 % <============================== ODE model =====================================>
@@ -121,7 +128,6 @@ end
 
 tstart1=tstart1_INP;
 tend1=tend1_INP;
-windowsize1=windowsize1_INP;
 printscreen1=printscreen1_INP;
 
 SCIs=[];
@@ -131,7 +137,7 @@ performanceFs=[];
 
 for j=1:replicates1
 
-    [Ys,curves]=Run_simulate_ODEModel(options,factor1);
+    [Ys,curves]=Run_simulate_ODEModel(options,windowsize1,factor1);
 
     vars.fit_index
 

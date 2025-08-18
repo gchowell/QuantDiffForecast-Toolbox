@@ -165,7 +165,7 @@ else
 end
 
 
-if exist('windowsize1_pass','var')==1 & isempty(windowsize1_pass)==0
+if exist('windowsize1_pass','var')==1 && isempty(windowsize1_pass)==0
 
     windowsize1=windowsize1_pass;
 else
