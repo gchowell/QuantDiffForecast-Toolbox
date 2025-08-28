@@ -49,14 +49,16 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
   <img src="docs/images/R0.png" width="48%">
 </p>
 
+4. Generate a 10-day ahead forecast:
+
    ```matlab
-   Run_Forecasting_ODEModel(@options_forecast_SEIR_flu1918,1,1,17,10)
+   Run_Forecasting_ODEModel(@options_forecast_SEIR_flu1918_dist1_1,1,1,17,10)
    ```
 
 ## Example outputs
    <p align="center">
-  <img src="docs/images/model_fit.png" width="48%">
-  <img src="docs/images/parameters.png" width="48%">
+  <img src="docs/images/forecast.png" width="48%">
+  <img src="docs/images/forecastingPerformance.png" width="48%">
 </p>
 
 
