@@ -61,6 +61,11 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
   <img src="docs/images/forecastingPerformance.png" width="48%">
 </p>
 
+5. Visualize the 10-day ahead forecast and other related outputs:
+
+   ```matlab
+    plotForecast_ODEModel(@options_forecast_SEIR_flu1918_dist1_1,1,1,17,10)
+   ```
 
 ## Tutorial and Documentation
 
