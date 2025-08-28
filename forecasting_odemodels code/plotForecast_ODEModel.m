@@ -850,11 +850,11 @@ writetable(T,strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0
 % <================= Save csv file with composite parameter ===============================================>
 % <=============================================================================================>
 
-composite12=[(tstart1:1:tend1)' composite12];
+composite12=[(tstart1:1:tend1)' composite12 log10(composite12(:,3)./composite12(:,2))];
 
 T = array2table(composite12);
 T.Properties.VariableNames(1)={'time'};
-T.Properties.VariableNames(2:4) = {'composite mean','composite 95% CI LB','composite 95% CI UB'};
+T.Properties.VariableNames(2:5) = {'composite mean','composite 95% CI LB','composite 95% CI UB','composite SCI'};
 writetable(T,strcat('./output/parameters-composite-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
 % <=====================================================================================================>
@@ -866,4 +866,3 @@ writetable(T,strcat('./output/parameters-composite-model_name-',model.name,'-fix
 T = array2table(AICcs);
 T.Properties.VariableNames(1:5) = {'time','AICc','AICc part1','AICc part2','numparams'};
 writetable(T,strcat('./output/AICc-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
-
