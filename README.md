@@ -93,7 +93,7 @@ Some files also include `vars.fit_index-<k>`. The original input filename may ap
 
 ## Tutorial and Documentation
 
-For a step-by-step guide and a detailed tutorial on how to use this toolbox, please refer to our paper:
+Please cite the tutorial paper:
 
 **Chowell G., Bleichrodt A., Luo R. (2024)**: "Parameter Estimation and Forecasting with Quantified Uncertainty for ODE Models using QuantDiffForecast: A MATLAB Toolbox and Tutorial". Statistics in Medicine, 43(9), 1826-1848.
 [https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036]
