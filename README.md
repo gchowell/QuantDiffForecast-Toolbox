@@ -28,7 +28,7 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 2. Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
 
    ```matlab
-   Run_Fit_ODEModel(@options_fit_SEIR_flu1918,1,1,17)
+   Run_Fit_ODEModel(@options_fit_SEIR_flu1918_dist1_1,1,1,17)
    ```
 
 ## Example outputs
