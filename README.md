@@ -37,12 +37,28 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
   <img src="docs/images/parameters.png" width="48%">
 </p>
 
-3. Visualize the fit and generate forecasts using:
+3. Visualize the fit and other related outputs:
 
    ```matlab
    plotFit_ODEModel(@options_fit_SEIR_flu1918,1,1,17)
+   ```
+
+## Additional outputs
+   <p align="center">
+  <img src="docs/images/stateVars.png" width="48%">
+  <img src="docs/images/R0.png" width="48%">
+</p>
+
+   ```matlab
    Run_Forecasting_ODEModel(@options_forecast_SEIR_flu1918,1,1,17,10)
    ```
+
+## Example outputs
+   <p align="center">
+  <img src="docs/images/model_fit.png" width="48%">
+  <img src="docs/images/parameters.png" width="48%">
+</p>
+
 
 ## Tutorial and Documentation
 
