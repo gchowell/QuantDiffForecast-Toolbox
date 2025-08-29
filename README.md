@@ -64,6 +64,12 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 | `getperformance`                             | `options_forecast_*`                  | Compute forecast performance metrics                                                                       | `0` or `1`                                                                                                                                                                |
 
 
+### Input file format
+Place a **two-column, headerless** text file in `./input/` named `<cadfilename1>.txt`:
+- Column 1: time index (0,1,2,…)
+- Column 2: observed series (e.g., incidence)
+
+
 2. Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
 
    ```matlab
