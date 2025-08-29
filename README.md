@@ -146,12 +146,13 @@ Some files also include `vars.fit_index-<k>`. The original input filename may ap
 | `bootstraps-ODEModel-curve-<file>.mat` | **Forecast** | Raw/bootstrap draws used to compute forecast CIs/PIs. | Parameter bootstrap arrays, simulated trajectories, and seeds for reproducibility. |
 
 
-## Tutorial and Documentation
-
-Please cite the tutorial paper:
+### How to cite
 
 **Chowell G., Bleichrodt A., Luo R. (2024)**: "Parameter Estimation and Forecasting with Quantified Uncertainty for ODE Models using QuantDiffForecast: A MATLAB Toolbox and Tutorial". Statistics in Medicine, 43(9), 1826-1848.
 [https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036]
+
+
+
 
 Additionally, a **YouTube tutorial** demonstrating the functionality of the toolbox is available [here](https://www.youtube.com/watch?v=eyyX63H12sY).
 
