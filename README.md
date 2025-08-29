@@ -1,6 +1,6 @@
 # QuantDiffForecast: A MATLAB Toolbox for Parameter Estimation and Forecasting with ODE Models
 
-Welcome to **QuantDiffForecast**, a MATLAB toolbox designed to estimate parameters and generate short-term forecasts with **quantified uncertainty** from dynamical models based on ordinary differential equations (ODEs). This toolbox is **user-friendly**, **flexible**, and suitable for applications across various scientific fields, including **epidemiology**, **population dynamics**, and **systems biology**.
+QuantDiffForecast is a MATLAB toolbox for parameter estimation and short-term forecasting with quantified uncertainty for ODE models, featuring rolling-window calibration, bootstrap CIs/PIs, and multiple error models (Normal/Poisson/NegBin).
 
 📄 **QuantDiffForecast Tutorial**: [https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036](https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036)
 
@@ -25,6 +25,14 @@ To get started, you'll need to create a `.txt` file containing your time-series 
 The simplest example provided in this repository is an SEIR (Susceptible-Exposed-Infectious-Removed) model, applied to data from the 1918 influenza pandemic in San Francisco.
 
 1. Specify the SEIR model parameters in `options_fit.m` and `options_forecast.m`.
+
+## Configure once: the options files
+
+- **[options_fit.m](./ensemble%20n-subepidemic%20code%20v1.0/options.m)** — estimation settings for fitting (used by `Run_Fit_ODEModel`).
+- **[options_fit.m](./ensemble%20n-subepidemic%20code%20v1.0/options.m)** — forecast horizon + performance settings (used by `Run_Forecasting_ODEModel`).
+
+> Tip: run `help options_fit_*` / `help options_forecast_*` in MATLAB to see the in-file headers.
+
 
 ## Options files configurations
 
