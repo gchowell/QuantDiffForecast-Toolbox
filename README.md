@@ -72,16 +72,13 @@ Column 1: time index 0, 1, 2, …
 
 Column 2: the observed series used for fitting/forecasting (e.g., incidence)
 
-Notes
-
 If the series is cumulative, the filename must begin with cumulative- (e.g., cumulative-daily-…).
 
 Rows are assumed equally spaced in the model time step; handle missing values upstream.
 
 Working with multi-series datasets
 
-QuantDiffForecast expects a two-column file (time, one observed series). If your source file has multiple observed columns, create one file per series or pre-select a column and write it to a 2-column file before running:
-
+QuantDiffForecast expects a two-column file (time, one observed series). If your source file has multiple observed columns, create one file per series or pre-select a column and write it to a 2-column file before running.
 
 2. Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
 
