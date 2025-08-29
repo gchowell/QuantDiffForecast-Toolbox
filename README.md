@@ -29,7 +29,7 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 ## Configure once: the options files
 
 - **[options_fit.m](./forecasting_odemodels%20code/options.m)** — estimation settings for fitting (used by `Run_Fit_ODEModel`).
-- **[options_fit.m](./forecasting_odemodels%20code/options.m)** — forecast horizon + performance settings (used by `Run_Forecasting_ODEModel`).
+- **[options_forecast.m](./forecasting_odemodels%20code/options.m)** — forecast horizon + performance settings (used by `Run_Forecasting_ODEModel`).
 
 > Tip: run `help options_fit_*` / `help options_forecast_*` in MATLAB to see the in-file headers.
 
