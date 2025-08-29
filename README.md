@@ -24,7 +24,7 @@ To get started, you'll need to create a `.txt` file containing your time-series 
 
 The simplest example provided in this repository is an SEIR (Susceptible-Exposed-Infectious-Removed) model, applied to data from the 1918 influenza pandemic in San Francisco.
 
-1. Specify the SEIR model parameters in `options_fit.m` and `options_forecast.m`.
+1. Specify the SEIR model parameters in `options_fit_*.m` and `options_forecast_*.m`.
 
 ## Configure once: the options files
 
