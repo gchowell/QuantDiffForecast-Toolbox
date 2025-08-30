@@ -86,6 +86,17 @@ Rows are assumed equally spaced in the model time step; handle missing values up
 plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
 ```
 
+### Example outputs
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/model_fit.png" alt="Model fit" width="100%"><br>
+      <sub> Model solutions </sub>
+    </td>
+  </tr>
+</table>
+
 ### Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
 
    ```matlab
