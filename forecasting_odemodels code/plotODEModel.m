@@ -129,7 +129,6 @@ data
 % solve model numerically
 %timevect=tstart1:1:tstart1+windowsize1-1;
 timevect=data(:,1)
-pause
 
 
 options=[];
