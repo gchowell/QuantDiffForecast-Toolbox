@@ -109,11 +109,11 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
   <tr>
     <td align="center" width="50%">
       <img src="docs/images/model_fit.png" alt="Model fit" width="100%"><br>
-      <sub><b>Figure 1.</b> Model fit to [DATASET] with [MODEL] ([METHOD], [ERROR]); shaded band: 95% CI.</sub>
+      <sub> Model fit </sub>
     </td>
     <td align="center" width="50%">
       <img src="docs/images/parameters.png" alt="Rolling parameter estimates" width="100%"><br>
-      <sub><b>Figure 2.</b> Rolling estimates for [PARAMS]; ribbons: 95% CI; header shows SCI = log10(UB/LB).</sub>
+      <sub> Parameter estimates </sub>
     </td>
   </tr>
 </table>
