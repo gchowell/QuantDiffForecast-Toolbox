@@ -121,7 +121,7 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
 ### Visualize the fit and other related outputs:
 
    ```matlab
-   plotFit_ODEModel(@options_fit_SEIR_flu1918,1,1,17)
+   plotFit_ODEModel(@options_fit_SEIR_flu1918_dist1_1,1,1,17)
    ```
 
 ### Additional outputs
