@@ -66,7 +66,7 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 
 ### Input file format
 
-Place a plain-text file in ./input/ named <mydata>.txt with:
+Place a plain-text file in `./input/` named `<mydata>.txt` with:
 
 col1 = time index (0,1,2,…)
 
