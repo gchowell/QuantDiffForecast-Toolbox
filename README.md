@@ -69,7 +69,9 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 Place a plain-text file in ./input/ named <mydata>.txt with:
 
 col1 = time index (0,1,2,…)
+
 col2 = observed series (e.g., incidence)
+
 col3+ = (optional) additional observed series
 
 If the series is cumulative, the filename must begin with cumulative- (e.g., cumulative-daily-…).
