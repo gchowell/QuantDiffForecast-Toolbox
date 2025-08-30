@@ -206,9 +206,6 @@ Some files also include `vars.fit_index-<k>`. The original input filename may ap
   doi     = {10.1002/sim.10036}
 }
 
-
-Additionally, a **YouTube tutorial** demonstrating the functionality of the toolbox is available [here](https://www.youtube.com/watch?v=eyyX63H12sY).
-
 ## License
 
 This project is licensed under the terms of the Creative Commons Attribution-NonCommercial-NoDerivs License. See [LICENSE](LICENSE) for more details.
