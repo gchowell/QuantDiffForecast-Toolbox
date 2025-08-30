@@ -159,7 +159,16 @@ Some files also include `vars.fit_index-<k>`. The original input filename may ap
 **Chowell G., Bleichrodt A., Luo R. (2024)**: "Parameter Estimation and Forecasting with Quantified Uncertainty for ODE Models using QuantDiffForecast: A MATLAB Toolbox and Tutorial". Statistics in Medicine, 43(9), 1826-1848.
 [https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10036]
 
-
+@article{Chowell2024QuantDiffForecast,
+  author  = {Gerardo Chowell and Amanda Bleichrodt and Ruiyan Luo},
+  title   = {Parameter estimation and forecasting with quantified uncertainty for ordinary differential equation models using QuantDiffForecast: A MATLAB toolbox and tutorial},
+  journal = {Statistics in Medicine},
+  year    = {2024},
+  volume  = {43},
+  number  = {9},
+  pages   = {1826--1848},
+  doi     = {10.1002/sim.10036}
+}
 
 
 Additionally, a **YouTube tutorial** demonstrating the functionality of the toolbox is available [here](https://www.youtube.com/watch?v=eyyX63H12sY).
