@@ -80,8 +80,6 @@ If the series is cumulative, the filename must begin with cumulative- (e.g., cum
 
 Rows are assumed equally spaced in the model time step; handle missing values upstream.
 
-Select which series (column) to fit in your options function. If your model output maps to the observation differently (e.g., scaled incidence), implement that mapping in the options/model code.
-
 ### Sanity-check model solutions (optional)
 
 ```matlab
