@@ -91,7 +91,7 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/images/model_fit.png" alt="Model fit" width="100%"><br>
+      <img src="docs/images/model_solutions.png" alt="" width="100%"><br>
       <sub> Model solutions </sub>
     </td>
   </tr>
