@@ -26,7 +26,7 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 
 Specify the SEIR model parameters in `options_fit_*.m` and `options_forecast_*.m`.
 
-copy an example options_fit_*.m file, change the data file and parameter settings, and rerun the three commands above.
+for a new problem, copy an example options_fit_*.m file, change the data file and parameter settings.
 
 ## Configure once: the options files
 
