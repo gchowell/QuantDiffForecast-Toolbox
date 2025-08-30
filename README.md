@@ -68,7 +68,7 @@ for a new problem, copy an example options_fit_*.m file, change the data file an
 
 ### Input file format
 
-Place a plain-text file in `./input/` named `<mydata>.txt` with:
+Place a plain-text file in `./input/` named `<cadfilename1>.txt` with:
 
 col1 = time index (0,1,2,…)
 
