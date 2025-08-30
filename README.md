@@ -85,7 +85,7 @@ Select which series (column) to fit in your options function. If your model outp
 ### Sanity-check model solutions (optional)
 
 ```matlab
-plotODEModel(@options_fit_SEIR_flu1918_dist1_1)`
+plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
 ```
 
 ### Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
@@ -100,31 +100,31 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)`
   <img src="docs/images/parameters.png" width="48%">
 </p>
 
-3. Visualize the fit and other related outputs:
+### Visualize the fit and other related outputs:
 
    ```matlab
    plotFit_ODEModel(@options_fit_SEIR_flu1918,1,1,17)
    ```
 
-## Additional outputs
+### Additional outputs
    <p align="center">
   <img src="docs/images/stateVars.png" width="48%">
   <img src="docs/images/R0.png" width="48%">
 </p>
 
-4. Generate a 10-day ahead forecast:
+### Generate a 10-day ahead forecast:
 
    ```matlab
    Run_Forecasting_ODEModel(@options_forecast_SEIR_flu1918_dist1_1,1,1,17,10)
    ```
 
-## Example outputs
+### Example outputs
    <p align="center">
   <img src="docs/images/forecast.png" width="48%">
   <img src="docs/images/forecastingPerformance.png" width="48%">
 </p>
 
-5. Visualize the 10-day ahead forecast and other related outputs:
+### Visualize the 10-day ahead forecast and other related outputs:
 
    ```matlab
     plotForecast_ODEModel(@options_forecast_SEIR_flu1918_dist1_1,1,1,17,10)
