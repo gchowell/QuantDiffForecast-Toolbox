@@ -118,12 +118,6 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
   </tr>
 </table>
 
-### Example outputs
-   <p align="center">
-  <img src="docs/images/model_fit.png" width="48%">
-  <img src="docs/images/parameters.png" width="48%">
-</p>
-
 ### Visualize the fit and other related outputs:
 
    ```matlab
@@ -135,6 +129,19 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
   <img src="docs/images/stateVars.png" width="48%">
   <img src="docs/images/R0.png" width="48%">
 </p>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/stateVars.png" alt="" width="100%"><br>
+      <sub> Model state solutions </sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/R0.png" alt="" width="100%"><br>
+      <sub> Empirical distribution of estimated R0 </sub>
+    </td>
+  </tr>
+</table>
 
 ### Generate a 10-day ahead forecast:
 
