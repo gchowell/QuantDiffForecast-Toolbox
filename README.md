@@ -66,19 +66,17 @@ The simplest example provided in this repository is an SEIR (Susceptible-Exposed
 
 ### Input file format
 
-Place a headerless text file in `./input/` named <cadfilename1>.txt:
+Place a plain-text file in ./input/ named <mydata>.txt with:
 
-Column 1: time index 0, 1, 2, …
-
-Column 2: the observed series used for fitting/forecasting (e.g., incidence)
+col1 = time index (0,1,2,…)
+col2 = observed series (e.g., incidence)
+col3+ = (optional) additional observed series
 
 If the series is cumulative, the filename must begin with cumulative- (e.g., cumulative-daily-…).
 
 Rows are assumed equally spaced in the model time step; handle missing values upstream.
 
-Working with multi-series datasets
-
-QuantDiffForecast expects a two-column file (time, one observed series). If your source file has multiple observed columns, create one file per series or pre-select a column and write it to a 2-column file before running.
+Select which series (column) to fit in your options function. If your model output maps to the observation differently (e.g., scaled incidence), implement that mapping in the options/model code.
 
 2. Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
 
