@@ -24,7 +24,9 @@ To get started, you'll need to create a `.txt` file containing your time-series 
 
 The simplest example provided in this repository is an SEIR (Susceptible-Exposed-Infectious-Removed) model, applied to data from the 1918 influenza pandemic in San Francisco.
 
-1. Specify the SEIR model parameters in `options_fit_*.m` and `options_forecast_*.m`.
+Specify the SEIR model parameters in `options_fit_*.m` and `options_forecast_*.m`.
+
+copy an example options_fit_*.m file, change the data file and parameter settings, and rerun the three commands above.
 
 ## Configure once: the options files
 
@@ -80,13 +82,19 @@ Rows are assumed equally spaced in the model time step; handle missing values up
 
 Select which series (column) to fit in your options function. If your model output maps to the observation differently (e.g., scaled incidence), implement that mapping in the options/model code.
 
-2. Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
+### Sanity-check model solutions (optional)
+
+```matlab
+plotODEModel(@options_fit_SEIR_flu1918_dist1_1)`
+```
+
+### Use the provided script `Run_Fit_ODEModel.m` to estimate parameters and fit the model to data:
 
    ```matlab
    Run_Fit_ODEModel(@options_fit_SEIR_flu1918_dist1_1,1,1,17)
    ```
 
-## Example outputs
+### Example outputs
    <p align="center">
   <img src="docs/images/model_fit.png" width="48%">
   <img src="docs/images/parameters.png" width="48%">
