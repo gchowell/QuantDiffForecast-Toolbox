@@ -125,10 +125,6 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
    ```
 
 ### Additional outputs
-   <p align="center">
-  <img src="docs/images/stateVars.png" width="48%">
-  <img src="docs/images/R0.png" width="48%">
-</p>
 
 <table>
   <tr>
@@ -150,10 +146,19 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_1)
    ```
 
 ### Example outputs
-   <p align="center">
-  <img src="docs/images/forecast.png" width="48%">
-  <img src="docs/images/forecastingPerformance.png" width="48%">
-</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/forecast.png" alt="" width="100%"><br>
+      <sub> Model forecast </sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/forecastingPerformance.png" alt="" width="100%"><br>
+      <sub> Forecasting performance </sub>
+    </td>
+  </tr>
+</table>
 
 ### Visualize the 10-day ahead forecast and other related outputs:
 
