@@ -745,6 +745,7 @@ if vars.num>1
     varslabels1(1)={'time'};
     dataTable=[timevect2'];
 
+    dataTable=dataTable(:);
 
     for i2=1:1:vars.num
 

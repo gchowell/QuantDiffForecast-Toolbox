@@ -356,7 +356,6 @@ disp('<=========================================================================
 disp('ODE Model:');
 disp(['  - Model Function: ', func2str(model.fc)]);
 disp(['  - Model Name: ', model.name]);
-disp(['  - Composite Parameter: ', params.composite_name]);
 disp('<============================================================================>');
 
 % Display Model Parameters
