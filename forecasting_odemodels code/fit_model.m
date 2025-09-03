@@ -53,50 +53,10 @@ else
     UB = [params.UB, sum(abs(data1(:, 2:end))), UBe];
 end
 
-
-% 
-% if 0 % USE LSQCURVEFIT (Non-linear least squares)
-% 
-%     options=optimset('tolfun',10^-5,'TolX',10^-5,'MaxFunEvals',3200,'MaxIter',3200, 'algorithm','trust-region-reflective');
-% 
-%     [P,resnorm,residual,exitflag,output,lambda,J]=lsqcurvefit(@plotModifiedLogisticGrowth1,z,timevect,data1(:,2),LB,UB,options);
-% 
-%     f=@plotModifiedLogisticGrowth1;
-% 
-%     problem = createOptimProblem('lsqcurvefit','x0',z,'objective',f,'lb',LB,'ub',UB,'xdata',timevect,'ydata',data1(:,2),'options',options);
-% 
-%     %ms = MultiStart('PlotFcns',@gsplotbestf,'Display','final');
-% 
-%     ms = MultiStart('Display','final');
-% 
-%     ms = MultiStart(ms,'StartPointsToRun','bounds')
-% 
-%     [P,errormulti] = run(ms,problem,20)
-% 
-%     z=P;
-% 
-%     [P,resnorm,residual,exitflag,output,lambda,J]=lsqcurvefit(@plotModifiedLogisticGrowth1,z,timevect,data1(:,2),LB,UB,options);
-% 
-% 
-% end
-
-%A=[];      % We are using fmincon, but using none of the constraint options
-%b=[];
-%Aeq=[];
-%beq=[];
-%nonlcon=[];
-
-%options=optimset('tolfun',10^-5,'TolX',10^-5,'MaxFunEvals',3200,'MaxIter',3200, 'algorithm','interior-point');
-
-%[P, fval, exitflag]=fmincon(@plotModifiedLogisticGrowthMethods1,z,A,b,Aeq,beq,LB,UB,nonlcon,options);
-
-%method1=1; %LSQ=0, MLE (Poisson)=1, Pearson chi-squared=2. MLE(neg binomial)=3
-
-ydata=data1(:,2:end);
-
-%convert a matrix into a long column vector using the (:) 
+% ydata for fitting (vectorize if multiple series)
+ydata = data1(:,2:end);
 if length(I0)>1
-    ydata=ydata(:);
+    ydata = ydata(:);
 end
 
 % Define the objective function handle
@@ -104,49 +64,77 @@ f = @parameterSearchODE;
 
 % Set optimization options for fmincon
 options = optimoptions('fmincon', ...
-    'Algorithm', 'sqp', ...  % sqp, interior-point
-    'StepTolerance', 1e-4, ... % Slightly relaxed
-    'FunctionTolerance', 1e-4, ... 
+    'Algorithm', 'sqp', ...                          % sqp, interior-point
+    'StepTolerance', 1e-4, ...
+    'FunctionTolerance', 1e-4, ...
     'OptimalityTolerance', 1e-4, ...
-    'MaxFunEvals', 10000, ...
-    'MaxIter', 10000);
+    'MaxFunctionEvaluations', 10000, ...
+    'MaxIterations', 10000);
 
 % Define the optimization problem
 problem = createOptimProblem('fmincon', 'objective', f, 'x0', z, ...
                              'lb', LB, 'ub', UB, 'options', options);
 
-% Setup MultiStart with no output display
-ms = MultiStart('Display', 'off');
-
-% Define start point sets
-tpoints = CustomStartPointSet(z);
-
-% Initialize the flag to manage the while loop
-flagg = -1;
-
-% Run optimization until a stopping condition is met
-while flagg < 0
-    initialguess = [];
-
-    % Add random start points if specified
-    if numstartpoints > 0
-        rpoints = RandomStartPointSet('NumStartPoints', numstartpoints);
-        allpts = {rpoints, tpoints};
-        initialguess = [list(rpoints, problem); z];
-    else
-        allpts = {tpoints};
-        initialguess = [initialguess; z];
-    end
-
-    % Run the MultiStart solver
-    [P, fval, flagg, outpt, allmins] = run(ms, problem, allpts);
-
+%% === Smarter start points (LHS maximin + de-dup + include z; hardened) ===
+d = numel(z);
+LB = LB(:)'; UB = UB(:)'; z = z(:)';
+if numel(LB) ~= d || numel(UB) ~= d
+    error('Length mismatch: numel(z)=%d, numel(LB)=%d, numel(UB)=%d', d, numel(LB), numel(UB));
+end
+flipMask = LB > UB;
+if any(flipMask)
+    tmp = LB(flipMask); LB(flipMask) = UB(flipMask); UB(flipMask) = tmp;
+end
+if ~all(isfinite(LB)) || ~all(isfinite(UB))
+    error('LB/UB must be finite.');
 end
 
-% P is the vector with the estimated parameters
+nStarts = max(0, floor(numstartpoints));
+span = UB - LB;
+
+% Project seed z into [LB,UB] and repair NaNs
+z0 = min(max(z,LB),UB);
+mid = (LB + UB)/2;
+nanZ = isnan(z0); if any(nanZ), z0(nanZ) = mid(nanZ); end
+
+lhsOK = exist('lhsdesign','file') == 2;
+if lhsOK && nStarts > 0
+    X = lhsdesign(nStarts, d, 'criterion','maximin','iterations',50);
+    starts = LB + X .* span;
+elseif nStarts > 0
+    starts = LB + rand(nStarts, d) .* span;
+else
+    starts = zeros(0,d);
+end
+
+starts = [starts; z0];
+starts = unique(round(starts,6), 'rows');
+
+% Keep rows inside bounds & finite
+inB = all(starts >= (LB - 1e-12) & starts <= (UB + 1e-12), 2);
+finiteReal = all(isfinite(starts), 2) & isreal(starts);
+starts = starts(inB & finiteReal, :);
+
+% Guarantee at least one valid start
+if isempty(starts)
+    starts = z0;
+end
+
+initialguess = starts;
+sp = CustomStartPointSet(starts);
+
+% Setup MultiStart (quiet; parallel if pool exists)
+useParallel = ~isempty(gcp('nocreate'));
+useParallel = 0;
+ms = MultiStart('Display','off', ...
+                'UseParallel',useParallel, ...
+                'StartPointsToRun','bounds-ineqs');
+
+% Run MultiStart once with smarter starts
+[P, fval, flagg, outpt, allmins] = run(ms, problem, sp);
 
 % Initialize the options for the ODE solver (if any specific options needed, define here)
-options = [];
+options_ode = [];
 
 % Set initial conditions based on params.fixI0 flag
 IC = vars.initial;
@@ -158,77 +146,45 @@ else
 end
 
 % Solve the differential equations using ode15s
-[~, F] = ode15s(model.fc, timevect, IC, options, P, params.extra0);
-F1 = F;  % Store the result in F1 (seems redundant unless F1 is used differently not shown here)
+[~, F] = ode15s(model.fc, timevect, IC, options_ode, P, params.extra0);
+F1 = F;
 
-% Initialize variables for fitting the data
+% Build fitted curve (handles levels vs. diffs per variable)
 yfit = zeros(length(ydata), 1);
 currentEnd = 0;
-
-% Loop through each variable index to be fitted
 for j = 1:length(vars.fit_index)
-    % Check if differentiation is needed
     if vars.fit_diff(j) == 1
-        % Compute absolute value of the derivative of the model output
         fitcurve = abs([F(1, vars.fit_index(j)); diff(F(:, vars.fit_index(j)))]);
     else
-        % Use the model output directly
         fitcurve = F(:, vars.fit_index(j));
     end
-
-    % Aggregate the fit results
     yfit(currentEnd + 1 : currentEnd + length(fitcurve)) = fitcurve;
     currentEnd = currentEnd + length(fitcurve);
 end
-
-% Final aggregated fit curve
 fitcurve = yfit;
 
-% 
-% figure
-% subplot(1,2,1)
-% plot(ydata,'ko')
-% hold on
-% plot(fitcurve,'r')
-
-
-% Calculate residuals
+% Residuals
 residual = fitcurve - ydata;
 
-% Decide action based on forecasting period
+% Forecast handling
 if forecastingperiod < 1
-    % If no extended forecasting is needed, adjust curve based on residuals
     forecastcurve = residual + ydata;
-    timevect2 = timevect;  % Use the original time vector
-    F2 = F1;               % Reuse the previously calculated ODE results
+    timevect2 = timevect;
+    F2 = F1;
 else
-    % Define the extended time vector for forecasting
     timevect2 = data1(1,1) : DT : (data1(end,1) + forecastingperiod * DT);
+    [~, F2] = ode15s(model.fc, timevect2, IC, options_ode, P, params.extra0);
 
-    % Solve the ODE to get new results over the extended time period
-    [~, F2] = ode15s(model.fc, timevect2, IC, options, P, params.extra0);
-
-    % Initialize forecast storage based on the number of fit indices and time points
     yforecast = zeros(length(vars.fit_index) * length(timevect2), 1);
     currentEnd = 0;
-
-    % Process each variable index specified for fitting
     for j = 1:length(vars.fit_index)
-        % Determine if the variable requires differencing
         if vars.fit_diff(j) == 1
-            % Calculate the absolute derivative of the forecast
             forecastcurve = abs([F2(1, vars.fit_index(j)); diff(F2(:, vars.fit_index(j)))]);
         else
-            % Use the ODE output directly for the forecast
             forecastcurve = F2(:, vars.fit_index(j));
         end
-
-        % Store the processed forecast in the yforecast array
         yforecast(currentEnd + 1 : currentEnd + length(forecastcurve)) = forecastcurve;
         currentEnd = currentEnd + length(forecastcurve);
     end
-
-    % Assign the compiled forecast data as the final forecast curve
     forecastcurve = yforecast;
 end
-
