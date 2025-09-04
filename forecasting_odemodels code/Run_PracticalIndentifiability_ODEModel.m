@@ -131,6 +131,7 @@ tend1=tend1_INP;
 printscreen1=printscreen1_INP;
 
 SCIs=[];
+paramss=[];
 performanceCs=[];
 performanceFs=[];
 
@@ -186,6 +187,11 @@ for j=1:replicates1
 
     SCIs=[SCIs;[j table2array(T)]];
 
+    T2=readtable(strcat('./output/parameters-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+
+    paramss=[paramss;[j table2array(T2)]];
+
+
     for i=1:length(vars.fit_index)
 
         T=readtable(strcat('./output/performance-calibration-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
@@ -226,6 +232,7 @@ end % replicates1
 
 
 SCIs
+paramss
 performanceCs
 performanceFs
 
