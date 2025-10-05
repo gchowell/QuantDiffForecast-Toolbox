@@ -679,8 +679,8 @@ for i=tstart1:1:tend1  %rolling window analysis
             % Apply interpolation
             if params.fixed(j)==0
 
-                span = 0.15; % Fraction of data used for local smoothing (adjust as needed)
-                y_smooth = smooth(profile1(:,1),profile1(:,2),span, 'loess');
+               span = 0.15; % or adjust as needed
+               y_smooth = smoothdata(profile1(:,2), 'loess', span);
 
                 %x_interp=linspace(profile1(1,1),profile1(end,1),100);
                 %y_interp1 = interp1(profile1(:,1),profile1(:,2),x_interp);

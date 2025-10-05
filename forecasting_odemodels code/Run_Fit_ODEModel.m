@@ -361,7 +361,7 @@ for i=tstart1:1:tend1  %rolling window analysis
     f_model1_sims=[];
 
     for j=1:M
-        
+                
         f_model1_sim=AddErrorStructure(cumsum(fitcurve_model1d),1,dist1,factor1,d);
 
         f_model1_sims=[f_model1_sims f_model1_sim];
@@ -750,8 +750,8 @@ for i=tstart1:1:tend1  %rolling window analysis
             % Apply interpolation
             if params.fixed(j)==0
 
-                span = 0.15; % Fraction of data used for local smoothing (adjust as needed)
-                y_smooth = smooth(profile1(:,1),profile1(:,2),span, 'loess');
+                span = 0.25; % Fraction of data used for local smoothing (adjust as needed)
+                y_smooth = smoothdata(profile1(:,2),'loess',span);
 
                 %x_interp=linspace(profile1(1,1),profile1(end,1),100);
                 %y_interp1 = interp1(profile1(:,1),profile1(:,2),x_interp);
