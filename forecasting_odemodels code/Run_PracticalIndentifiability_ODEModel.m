@@ -181,26 +181,26 @@ for j=1:replicates1
     % Model fit and generate forecast
     Run_Forecasting_ODEModel(options,1,1,windowsize1,forecastingperiod);
 
-    T=readtable(strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+    T=readtable(strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
 
     T.Properties.VariableNames
 
     SCIs=[SCIs;[j table2array(T)]];
 
-    T2=readtable(strcat('./output/parameters-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+    T2=readtable(strcat('./output/parameters-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
 
     paramss=[paramss;[j table2array(T2)]];
 
 
     for i=1:length(vars.fit_index)
 
-        T=readtable(strcat('./output/performance-calibration-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+        T=readtable(strcat('./output/performance-calibration-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
 
         T.Properties.VariableNames
 
         performanceCs=[performanceCs;[j vars.fit_index(i) table2array(T)]];
 
-        T=readtable(strcat('./output/performance-forecasting-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+        T=readtable(strcat('./output/performance-forecasting-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
 
         performanceFs=[performanceFs;[zeros(forecastingperiod,1)+j zeros(forecastingperiod,1)+vars.fit_index(i) table2array(T)]];
 
@@ -208,24 +208,24 @@ for j=1:replicates1
 
     %Read forecast and quantify change in forecast uncertainty
 
-    if 0
-        for j=1:length(vars.fit_index)
-
-            T=readtable(strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(tstart1),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'));
-
-            width_calib=T.UB(1:windowsize1)-T.LB(1:windowsize1)
-
-            width_pred=T.UB(windowsize1+1:end)-T.LB(windowsize1+1:end)
-
-            % Find estimated horizon at which the width of the 95%PI doubles
-            % starting from the last data point of the calibration period
-            estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
-
-            % Display result
-            fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
-
-        end
-    end
+    % if 0
+    %     for j=1:length(vars.fit_index)
+    % 
+    %         T=readtable(strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(tstart1),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'));
+    % 
+    %         width_calib=T.UB(1:windowsize1)-T.LB(1:windowsize1)
+    % 
+    %         width_pred=T.UB(windowsize1+1:end)-T.LB(windowsize1+1:end)
+    % 
+    %         % Find estimated horizon at which the width of the 95%PI doubles
+    %         % starting from the last data point of the calibration period
+    %         estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
+    % 
+    %         % Display result
+    %         fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
+    % 
+    %     end
+    % end
 
 
 end % replicates1
