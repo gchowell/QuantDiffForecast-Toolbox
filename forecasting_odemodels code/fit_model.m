@@ -124,7 +124,7 @@ initialguess = starts;
 sp = CustomStartPointSet(starts);
 
 % Setup MultiStart
-ms = MultiStart('Display','off','StartPointsToRun','bounds-ineqs');
+ms = MultiStart('Display','off');
 
 % Run MultiStart once with smarter starts
 [P, fval, flagg, outpt, allmins] = run(ms, problem, sp);
