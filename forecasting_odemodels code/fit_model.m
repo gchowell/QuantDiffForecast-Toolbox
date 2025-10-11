@@ -123,12 +123,8 @@ end
 initialguess = starts;
 sp = CustomStartPointSet(starts);
 
-% Setup MultiStart (quiet; parallel if pool exists)
-useParallel = ~isempty(gcp('nocreate'));
-useParallel = 0;
-ms = MultiStart('Display','off', ...
-                'UseParallel',useParallel, ...
-                'StartPointsToRun','bounds-ineqs');
+% Setup MultiStart
+ms = MultiStart('Display','off','StartPointsToRun','bounds-ineqs');
 
 % Run MultiStart once with smarter starts
 [P, fval, flagg, outpt, allmins] = run(ms, problem, sp);
