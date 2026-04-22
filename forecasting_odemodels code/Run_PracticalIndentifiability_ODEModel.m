@@ -1,5 +1,5 @@
 
-function Run_PracticalIndentifiability_ODEModel(options_pass,windowsize1_pass,factor1,replicates1)
+function Run_PracticalIndentifiability_ODEModel(options_pass,windowsize1_pass,factor1,replicates1,replicate_id)
 
 %Run_PracticalIndentifiability_ODEModel(@options_forecast_SEIR_plain_unreported_dist1_1,4,2)
 
@@ -44,7 +44,7 @@ vars_INP.num=length(vars_INP.label); % number of variables comprising the ODE mo
 % <================================ Datasets properties ==============================>
 % <============================================================================>
 
-cadfilename1=cadfilename1_INP;
+cadfilename1 = sprintf('%s-windowsize-%d', cadfilename1_INP, windowsize1_pass);
 
 DT=1;
 
@@ -130,13 +130,14 @@ tstart1=tstart1_INP;
 tend1=tend1_INP;
 printscreen1=printscreen1_INP;
 
-SCIs=[];
-paramss=[];
-performanceCs=[];
-performanceFs=[];
+% Support single replicate mode (for parallel execution) or loop mode
+if exist('replicate_id','var') && ~isempty(replicate_id)
+    replicate_list = replicate_id;
+else
+    replicate_list = 1:replicates1;
+end
 
-
-for j=1:replicates1
+for j=replicate_list
 
     [Ys,curves]=Run_simulate_ODEModel(options,windowsize1,factor1);
 
@@ -165,77 +166,28 @@ for j=1:replicates1
 
 
     [~, baseName, ext] = fileparts(cadfilename1);
-    if isempty(ext) || ~strcmpi(ext, '.txt')
-        cadfilename1 = [baseName, '.txt'];
+    
+    % Include replicate_id in input filename for parallel execution
+    if exist('replicate_id','var') && ~isempty(replicate_id)
+        cadfilename1_input = [baseName, '-replicate-', num2str(replicate_id), '.txt'];
     else
-        cadfilename1 = [baseName, '.txt'];  % enforce lowercase .txt
+        cadfilename1_input = [baseName, '.txt'];
     end
 
-
     %  Build platform-independent path with fullfile
-    fullFilePath = fullfile('.', 'input', cadfilename1);
+    fullFilePath = fullfile('.', 'input', cadfilename1_input);
 
     save(fullFilePath,'curves','-ascii')
 
 
-    % Model fit and generate forecast
-    Run_Forecasting_ODEModel(options,1,1,windowsize1,forecastingperiod);
-
-    T=readtable(strcat('./output/SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
-
-    T.Properties.VariableNames
-
-    SCIs=[SCIs;[j table2array(T)]];
-
-    T2=readtable(strcat('./output/parameters-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
-
-    paramss=[paramss;[j table2array(T2)]];
-
-
-    for i=1:length(vars.fit_index)
-
-        T=readtable(strcat('./output/performance-calibration-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
-
-        T.Properties.VariableNames
-
-        performanceCs=[performanceCs;[j vars.fit_index(i) table2array(T)]];
-
-        T=readtable(strcat('./output/performance-forecasting-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(i)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'),'VariableNamingRule','preserve')
-
-        performanceFs=[performanceFs;[zeros(forecastingperiod,1)+j zeros(forecastingperiod,1)+vars.fit_index(i) table2array(T)]];
-
+    % Model fit and generate forecast - saves one .mat file per replicate
+    if exist('replicate_id','var') && ~isempty(replicate_id)
+        Run_Forecasting_ODEModel2(options,1,1,windowsize1,forecastingperiod,replicate_id);
+    else
+        Run_Forecasting_ODEModel2(options,1,1,windowsize1,forecastingperiod,[]);
     end
-
-    %Read forecast and quantify change in forecast uncertainty
-
-    % if 0
-    %     for j=1:length(vars.fit_index)
-    % 
-    %         T=readtable(strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(tstart1),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'));
-    % 
-    %         width_calib=T.UB(1:windowsize1)-T.LB(1:windowsize1)
-    % 
-    %         width_pred=T.UB(windowsize1+1:end)-T.LB(windowsize1+1:end)
-    % 
-    %         % Find estimated horizon at which the width of the 95%PI doubles
-    %         % starting from the last data point of the calibration period
-    %         estimated_horizon = find_time_for_value(1:forecastingperiod,width_pred, 2*width_calib(end));
-    % 
-    %         % Display result
-    %         fprintf('Estimated horizon for value %.2f: %.2f\n', 2*width_calib(end), estimated_horizon);
-    % 
-    %     end
-    % end
-
 
 end % replicates1
 
-
-SCIs
-paramss
-performanceCs
-performanceFs
-
-
-save(strcat('./output/Results-SCIs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-factor1-',num2str(factor1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.mat'),'-mat')
-
+% Run_Forecasting_ODEModel now saves results directly to .mat files
+% No additional file operations needed here
