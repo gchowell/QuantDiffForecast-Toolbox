@@ -113,7 +113,12 @@ else
 end
 
 % Create full file path
-fullFilePath = fullfile('./input', cadfilename1_input);
+%fullFilePath = fullfile('./input', cadfilename1_input);
+
+basePath = fileparts(mfilename('fullpath'));
+inputDir = fullfile(basePath, 'input');
+fullFilePath = fullfile(inputDir, cadfilename1_input);
+
 
 % Check if the file exists before attempting to load
 if exist(fullFilePath, 'file') == 2
@@ -686,6 +691,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         % <=========================================================================================>
 
 
+        outputDir = fullfile(basePath, 'output');
 
         if getperformance && forecastingperiod>0 && (length(data_all)<(windowsize1+forecastingperiod))
 
@@ -697,7 +703,12 @@ for i=tstart1:1:tend1  %rolling window analysis
 
             T = array2table(forecastdata);
             T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
-            writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv'))
+            %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv'))
+
+            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv');
+            fullFilePath = fullfile(outputDir, fileName);
+            writetable(T, fullFilePath);
+
 
         else
 
@@ -709,7 +720,11 @@ for i=tstart1:1:tend1  %rolling window analysis
 
             T = array2table(forecastdata);
             T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
-            writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv'))
+            %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv'))
+
+            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv');
+            fullFilePath = fullfile(outputDir, fileName);
+            writetable(T, fullFilePath);
 
         end
 
@@ -1008,5 +1023,9 @@ end
 %%
 
 % Save one .mat file per replicate including forecast curves and summary metrics.
-save(strcat('./output/results',replicate_suffix,'-model_name-',model.name,'-calibrationperiod-',num2str(windowsize1),'.mat'), ...
-    'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', '-mat')
+%save(strcat('./output/results',replicate_suffix,'-model_name-',model.name,'-calibrationperiod-',num2str(windowsize1),'.mat'), ...
+%    'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', '-mat')
+
+fileName = strcat('results',replicate_suffix,'-model_name-',model.name,'-calibrationperiod-',num2str(windowsize1),'.mat');
+fullFilePath = fullfile(outputDir, fileName);
+save(fullFilePath, 'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', '-mat');

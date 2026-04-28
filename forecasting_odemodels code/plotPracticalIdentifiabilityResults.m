@@ -130,12 +130,21 @@ if run_flag
     % Filter out tasks whose output already exists
     run_mask = true(1, total_tasks);
     for t = 1:total_tasks
-        outfile = sprintf('./output/results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
+
+        basePath = fileparts(mfilename('fullpath'));
+
+        output_Dir = fullfile(basePath, 'output');
+
+        fileName = sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
             task_rep(t), model_name, task_ws(t));
+
+        outfile = fullfile(output_Dir, fileName);
+
         if isfile(outfile)
             fprintf('Output exists: %s - skipping.\n', outfile);
             run_mask(t) = false;
         end
+
     end
     run_idx = find(run_mask);
     num_to_run = length(run_idx);
@@ -163,17 +172,20 @@ end
 % PLOTTING (reads from ./output/)
 % ============================================================================
 
-output_dir = fullfile('.', 'output');
+%output_dir = fullfile('.', 'output');
+
+basePath = fileparts(mfilename('fullpath'));
+output_Dir = fullfile(basePath, 'output');
 
 close all;
 
 if ismember(plot_type, {'PII', 'both'})
-    plot_PII_figure(output_dir, error_type, model_name, model_display, ...
+    plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
         params_label, estimated_indices, windowsize1, num_replicates);
 end
 
 if ismember(plot_type, {'CI_grid', 'both'})
-    plot_CI_grid_figure(output_dir, error_type, model_name, model_display, ...
+    plot_CI_grid_figure(output_Dir, error_type, model_name, model_display, ...
         params_label, estimated_indices, true_values, ...
         windowsize1, num_replicates);
 end
@@ -185,7 +197,7 @@ end
 % ============================================================================
 % FUNCTION: plot_PII_figure
 % ============================================================================
-function plot_PII_figure(output_dir, error_type, model_name, model_display, ...
+function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
         params_label, estimated_indices, windowsize1, num_replicates)
 
     num_estimated = length(estimated_indices);
@@ -208,7 +220,7 @@ function plot_PII_figure(output_dir, error_type, model_name, model_display, ...
             SCI_vals = NaN(num_replicates, 1);
             count = 0;
             for r = 1:num_replicates
-                fname = fullfile(output_dir, ...
+                fname = fullfile(output_Dir, ...
                     sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
                     r, model_name, windowsize1));
                 if isfile(fname)
@@ -260,7 +272,7 @@ function plot_PII_figure(output_dir, error_type, model_name, model_display, ...
                 ws = windowsize1(w);
                 count = 0;
                 for r = 1:num_replicates
-                    fname = fullfile(output_dir, ...
+                    fname = fullfile(output_Dir, ...
                         sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
                         r, model_name, ws));
                     if isfile(fname)
@@ -329,7 +341,7 @@ end
 %   Blue dashed vertical line at true parameter value
 %   One figure per estimated parameter
 % ============================================================================
-function plot_CI_grid_figure(output_dir, error_type, model_name, model_display, ...
+function plot_CI_grid_figure(output_Dir, error_type, model_name, model_display, ...
         params_label, estimated_indices, true_values, ...
         windowsize1, num_replicates)
 
@@ -354,7 +366,7 @@ function plot_CI_grid_figure(output_dir, error_type, model_name, model_display, 
             UBs = [];
 
             for r = 1:num_replicates
-                fname = fullfile(output_dir, ...
+                fname = fullfile(output_Dir, ...
                     sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
                     r, model_name, ws));
                 if isfile(fname)

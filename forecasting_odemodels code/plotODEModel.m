@@ -106,7 +106,8 @@ else
 end
 
 %  Build platform-independent path with fullfile
-fullFilePath = fullfile('.', 'input', cadfilename1);
+basePath = fileparts(mfilename('fullpath'));
+fullFilePath = fullfile(basePath, 'input', cadfilename1);
 
 if isfile(fullFilePath)
     % File exists.
