@@ -1,4 +1,4 @@
-function   [AICcs,performanceC,performanceF,forecast_model1,forecast_model12,data1,datalatest,Ys]=Run_Forecasting_ODEModel(options_pass,tstart1_pass,tend1_pass,windowsize1_pass,forecastingperiod_pass,replicate_id)
+function   [AICcs,performanceC,performanceF,forecast_model1,forecast_model12,data1,datalatest,Ys]=Run_Forecasting_ODEModel(options_pass,tstart1_pass,tend1_pass,windowsize1_pass,forecastingperiod_pass,replicate_id,output_dir_pass)
 
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>
@@ -28,6 +28,10 @@ else
 
     [cadfilename1_INP,caddisease_INP,datatype_INP, dist1_INP, numstartpoints_INP,M_INP, model_INP, params_INP, vars_INP, getperformance_INP,forecastingperiod_INP,windowsize1_INP,tstart1_INP,tend1_INP,printscreen1_INP]=options_forecast;
 
+end
+
+if ~exist('output_dir_pass','var')
+    output_dir_pass = [];
 end
 
 params_INP.num=length(params_INP.label); % number of model parameters
@@ -101,10 +105,12 @@ end
 % Include replicate_id in filenames for parallel execution
 if exist('replicate_id','var') && ~isempty(replicate_id)
     replicate_suffix = strcat('-replicate-', num2str(replicate_id));
+    replicate_file_token = sprintf('_rep%d', replicate_id);
     cadfilename1_input = strcat(cadfilename1, replicate_suffix, '.txt');
     cadfilename1 = strcat(cadfilename1, replicate_suffix);
 else
     replicate_suffix = '';
+    replicate_file_token = '';
     if ~endsWith(cadfilename1, '.txt', 'IgnoreCase', true)
         cadfilename1_input = strcat(cadfilename1, '.txt');
     else
@@ -117,6 +123,14 @@ end
 
 basePath = fileparts(mfilename('fullpath'));
 inputDir = fullfile(basePath, 'input');
+if isempty(output_dir_pass)
+    outputDir = fullfile(basePath, 'output');
+else
+    outputDir = output_dir_pass;
+end
+if ~exist(outputDir, 'dir')
+    mkdir(outputDir);
+end
 fullFilePath = fullfile(inputDir, cadfilename1_input);
 
 
@@ -184,6 +198,8 @@ if exist('windowsize1_pass','var')==1 && isempty(windowsize1_pass)==0
 else
     windowsize1=windowsize1_INP;
 end
+
+window_file_token = strrep(sprintf('W%g', windowsize1), '.', 'p');
 
 printscreen1=printscreen1_INP;
 
@@ -691,8 +707,6 @@ for i=tstart1:1:tend1  %rolling window analysis
         % <=========================================================================================>
 
 
-        outputDir = fullfile(basePath, 'output');
-
         if getperformance && forecastingperiod>0 && (length(data_all)<(windowsize1+forecastingperiod))
 
             [length(data_all) windowsize1+forecastingperiod]
@@ -705,7 +719,12 @@ for i=tstart1:1:tend1  %rolling window analysis
             T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
             %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv'))
 
-            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv');
+            if numel(vars.fit_index) == 1 && tstart1 == tend1
+                fileName = sprintf('Forecast_%s%s.csv', window_file_token, replicate_file_token);
+            else
+                fileName = sprintf('Forecast_%s%s_t%d_idx%d.csv', window_file_token, ...
+                    replicate_file_token, i, vars.fit_index(j));
+            end
             fullFilePath = fullfile(outputDir, fileName);
             writetable(T, fullFilePath);
 
@@ -722,7 +741,12 @@ for i=tstart1:1:tend1  %rolling window analysis
             T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
             %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv'))
 
-            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,replicate_suffix,'.csv');
+            if numel(vars.fit_index) == 1 && tstart1 == tend1
+                fileName = sprintf('Forecast_%s%s.csv', window_file_token, replicate_file_token);
+            else
+                fileName = sprintf('Forecast_%s%s_t%d_idx%d.csv', window_file_token, ...
+                    replicate_file_token, i, vars.fit_index(j));
+            end
             fullFilePath = fullfile(outputDir, fileName);
             writetable(T, fullFilePath);
 
@@ -1026,6 +1050,6 @@ end
 %save(strcat('./output/results',replicate_suffix,'-model_name-',model.name,'-calibrationperiod-',num2str(windowsize1),'.mat'), ...
 %    'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', '-mat')
 
-fileName = strcat('results',replicate_suffix,'-model_name-',model.name,'-calibrationperiod-',num2str(windowsize1),'.mat');
+fileName = sprintf('results_%s%s.mat', window_file_token, replicate_file_token);
 fullFilePath = fullfile(outputDir, fileName);
 save(fullFilePath, 'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', '-mat');

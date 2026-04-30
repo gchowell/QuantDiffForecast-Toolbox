@@ -107,6 +107,17 @@ for k = 1:num_estimated
 end
 fprintf('\n\n');
 
+basePath = fileparts(mfilename('fullpath'));
+output_root_Dir = fullfile(basePath, 'output');
+analysis_folder = make_analysis_folder_name(model_name, model_display, error_type, windowsize1);
+output_Dir = fullfile(output_root_Dir, analysis_folder);
+
+if ~exist(output_Dir, 'dir')
+    mkdir(output_Dir);
+end
+
+fprintf('Output folder: %s\n\n', output_Dir);
+
 % ============================================================================
 % RUN COMPUTATION (parallel across replicates)
 % ============================================================================
@@ -131,14 +142,7 @@ if run_flag
     run_mask = true(1, total_tasks);
     for t = 1:total_tasks
 
-        basePath = fileparts(mfilename('fullpath'));
-
-        output_Dir = fullfile(basePath, 'output');
-
-        fileName = sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
-            task_rep(t), model_name, task_ws(t));
-
-        outfile = fullfile(output_Dir, fileName);
+        outfile = result_file_path(output_Dir, task_rep(t), task_ws(t), model_name, false);
 
         if isfile(outfile)
             fprintf('Output exists: %s - skipping.\n', outfile);
@@ -161,7 +165,7 @@ if run_flag
             fprintf('Running: replicate %d, windowsize %d ...\n', ...
                 run_rep(t), run_ws(t));
             Run_PracticalIndentifiability_ODEModel(...
-                options_handle, run_ws(t), 5, 1, run_rep(t));
+                options_handle, run_ws(t), 5, 1, run_rep(t), output_Dir);
         end
     end
 
@@ -173,9 +177,6 @@ end
 % ============================================================================
 
 %output_dir = fullfile('.', 'output');
-
-basePath = fileparts(mfilename('fullpath'));
-output_Dir = fullfile(basePath, 'output');
 
 close all;
 
@@ -220,9 +221,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
             SCI_vals = NaN(num_replicates, 1);
             count = 0;
             for r = 1:num_replicates
-                fname = fullfile(output_Dir, ...
-                    sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
-                    r, model_name, windowsize1));
+                fname = result_file_path(output_Dir, r, windowsize1, model_name, true);
                 if isfile(fname)
                     S = load(fname, 'SCI');
                     SCI_vals(r) = S.SCI(1, estimated_indices(p));
@@ -258,7 +257,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
             grid off; box on; ylim([0 inf]);
         end
 
-        outname = sprintf('%s_%s_T%d_PII_parameters', model_display, error_type, windowsize1);
+        outname = 'plot_box_param';
 
     else
         % --- Multiple window sizes: line plot (median + 95% CI) ---
@@ -272,9 +271,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
                 ws = windowsize1(w);
                 count = 0;
                 for r = 1:num_replicates
-                    fname = fullfile(output_Dir, ...
-                        sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
-                        r, model_name, ws));
+                    fname = result_file_path(output_Dir, r, ws, model_name, true);
                     if isfile(fname)
                         S = load(fname, 'SCI');
                         SCIss(r, w) = S.SCI(1, estimated_indices(p));
@@ -322,7 +319,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
             linkaxes(axs, 'x');
         end
 
-        outname = sprintf('%s_%s_PII_parameters', model_display, error_type);
+        outname = 'PII_param';
     end
 
     set(gcf, 'Color', 'white', 'Renderer', 'painters');
@@ -330,8 +327,9 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
     pos = get(gcf, 'Position');
     set(gcf, 'PaperUnits', 'centimeters', 'PaperSize', [pos(3) pos(4)], ...
         'PaperPosition', [0 0 pos(3) pos(4)]);
-    print(gcf, outname, '-dpdf');
-    fprintf('Saved: %s.pdf\n', outname);
+    outfile = fullfile(output_Dir, outname);
+    print(gcf, outfile, '-dpdf');
+    fprintf('Saved: %s.pdf\n', outfile);
 end
 
 % ============================================================================
@@ -366,9 +364,7 @@ function plot_CI_grid_figure(output_Dir, error_type, model_name, model_display, 
             UBs = [];
 
             for r = 1:num_replicates
-                fname = fullfile(output_Dir, ...
-                    sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
-                    r, model_name, ws));
+                fname = result_file_path(output_Dir, r, ws, model_name, true);
                 if isfile(fname)
                     S = load(fname, 'paramss');
                     col_median = 1 + (param_idx-1)*3;
@@ -419,8 +415,73 @@ function plot_CI_grid_figure(output_Dir, error_type, model_name, model_display, 
         pos = get(fig, 'Position');
         set(fig, 'PaperUnits', 'centimeters', 'PaperSize', [pos(3) pos(4)], ...
             'PaperPosition', [0 0 pos(3) pos(4)]);
-        outname = sprintf('%s_%s_CI_grid_param_%d', model_display, error_type, param_idx);
-        print(fig, outname, '-dpdf');
-        fprintf('Saved: %s.pdf\n', outname);
+        outname = sprintf('CI_grid_param_%d', param_idx);
+        outfile = fullfile(output_Dir, outname);
+        print(fig, outfile, '-dpdf');
+        fprintf('Saved: %s.pdf\n', outfile);
     end
+end
+
+function fname = result_file_path(output_Dir, replicate_id, windowsize1, model_name, use_legacy)
+    fname = fullfile(output_Dir, ...
+        sprintf('results_%s_rep%d.mat', window_file_token(windowsize1), replicate_id));
+
+    if use_legacy && ~isfile(fname)
+        legacy_Dir = fileparts(output_Dir);
+        legacy_name = sprintf('results-replicate-%d-model_name-%s-calibrationperiod-%d.mat', ...
+            replicate_id, model_name, windowsize1);
+        legacy_fname = fullfile(legacy_Dir, legacy_name);
+        if isfile(legacy_fname)
+            fname = legacy_fname;
+        end
+    end
+end
+
+function folder_name = make_analysis_folder_name(model_name, model_display, error_type, windowsize1)
+    scenario = scenario_from_model_name(model_name);
+    window_label = window_folder_label(windowsize1);
+
+    if isempty(scenario) || strcmp(scenario, 'r')
+        folder_name = sprintf('%s_%s_%s', model_display, error_type, window_label);
+    else
+        folder_name = sprintf('%s_%s_%s_%s', model_display, scenario, error_type, window_label);
+    end
+
+    folder_name = regexprep(folder_name, '[<>:"/\\|?*]', '_');
+    folder_name = regexprep(folder_name, '\s+', '_');
+    folder_name = regexprep(folder_name, '_+', '_');
+end
+
+function scenario = scenario_from_model_name(model_name)
+    parts = strsplit(model_name, '-PII-');
+    if numel(parts) < 2
+        scenario = '';
+        return
+    end
+
+    scenario = regexprep(parts{2}, '-dist1-\d+', '');
+    scenario = regexprep(scenario, '^-|-$', '');
+end
+
+function label = window_folder_label(windowsize1)
+    if numel(windowsize1) == 1
+        label = sprintf('W%s', number_file_token(windowsize1));
+    else
+        diffs = diff(windowsize1);
+        if all(diffs == diffs(1))
+            label = sprintf('W%s-%s-%s', number_file_token(windowsize1(1)), ...
+                number_file_token(diffs(1)), number_file_token(windowsize1(end)));
+        else
+            pieces = arrayfun(@number_file_token, windowsize1, 'UniformOutput', false);
+            label = ['W' strjoin(pieces, '-')];
+        end
+    end
+end
+
+function token = window_file_token(windowsize1)
+    token = sprintf('W%s', number_file_token(windowsize1));
+end
+
+function token = number_file_token(value1)
+    token = strrep(sprintf('%g', value1), '.', 'p');
 end
