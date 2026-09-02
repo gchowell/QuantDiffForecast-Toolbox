@@ -127,13 +127,18 @@ windowsize1
 
 data
 
-% solve model numerically
-%timevect=tstart1:1:tstart1+windowsize1-1;
-timevect=data(:,1)
+% Time grid in real time units (data index times DT), consistent with
+% the calibration grid used by fit_model.
+timevect=data(:,1)*DT;
 
-
-options=[];
 IC=vars.initial;
+
+% Solve with the same tight tolerances used during parameter
+% estimation, so the curves shown here correspond to the solutions the
+% likelihood was evaluated on. 'NonNegative' keeps state variables from
+% drifting negative; remove it for models with legitimately negative
+% states.
+options=odeset('RelTol',1e-8,'AbsTol',1e-10,'NonNegative',1:length(IC));
 
 cc1=1;
 
@@ -148,28 +153,60 @@ for x=1:length(vars.fit_index)
 
     for j=1:M
 
-        param1=[];
+        % Uniform random draws over the full [LB,UB] box can produce parameter
+        % sets for which the ODE blows up, fails mid-interval, or returns
+        % complex values. Each draw is validated; failed draws are redrawn (up
+        % to 20 times) and skipped with a warning if no integrable draw is
+        % found. Draw j==1 uses params.initial deterministically, so it is not
+        % redrawn.
+        maxdraws=20;
+        drawok=false;
 
-        for i=1:params.num
+        for attempt=1:maxdraws
 
-            if params.fixed(i) || j==1
-                param1=[param1;params.initial(i)];
+            param1=[];
 
-            else
-                param1=[param1;unifrnd(params.LB(i),params.UB(i))];
+            for i=1:params.num
+
+                if params.fixed(i) || j==1
+                    param1=[param1;params.initial(i)];
+
+                else
+                    param1=[param1;unifrnd(params.LB(i),params.UB(i))];
+                end
+
+            end
+
+            try
+                [~,F]=ode15s(model.fc,timevect,IC,options,param1,params.extra0);
+            catch
+                F=[];
+            end
+
+            if ~isempty(F) && size(F,1)==length(timevect) && isreal(F) && all(isfinite(F(:)))
+                drawok=true;
+                break
+            end
+
+            if j==1
+                break   % deterministic draw; redrawing cannot help
             end
 
         end
 
+        if ~drawok
+            warning('plotODEModel:failedDraw', ...
+                'Parameter draw %d could not be integrated after %d attempts; skipping it.', j, maxdraws);
+            continue
+        end
+
+        % record the composite parameter only for successfully integrated
+        % draws, so composite1 stays aligned with curvess and SSEs below
         if isempty(params.composite)==1
             composite1=[composite1;NaN];
         else
             composite1=[composite1;params.composite(param1')];
         end
- 
-        [~,F]=ode15s(model.fc,timevect,IC,options,param1,params.extra0);
-
-        F=real(F);
 
         for i2=1:vars.num
             Ys(i2,j)={F(:,i2)};
@@ -365,7 +402,13 @@ if 1
 
     curves=[];
     for j=1:length(vars.fit_index)
+        % This solve at params.initial generates the synthetic noisy curve;
+        % verify the integration succeeded before using its output.
         [~,F]=ode15s(model.fc,timevect,IC,options,params.initial,params.extra0);
+        if size(F,1)~=length(timevect) || any(~isfinite(F(:))) || ~isreal(F)
+            error('plotODEModel:initialSolveFailed', ...
+                'The ODE could not be integrated at params.initial; check parameter values and bounds.');
+        end
         if vars.fit_diff(j)==1
             fitcurve=abs([F(1,vars.fit_index(j));diff(F(:,vars.fit_index(j)))]);
         else

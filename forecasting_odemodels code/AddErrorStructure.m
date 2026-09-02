@@ -74,9 +74,13 @@ for real=1:M
 
         case 3
             % Negative binomial dist with parameter VAR= MEAN + alpha*MEAN
+            eps1=0.001;
             for t=2:length(yi)
                 lambda=abs(yi(t)-yi(t-1));
                 mean1=lambda;
+                if mean1==0     % guard against zero mean: mean1=0 gives var1=0,
+                    mean1=eps1; % then p1=0/0=NaN and nbinrnd(NaN,NaN)=NaN
+                end             % would enter the replicate data.
                 var1=mean1+mean1*factor1;
                 p1=mean1/var1;
                 r1=mean1*p1/(1-p1);
@@ -87,9 +91,13 @@ for real=1:M
             % Negative binomial dist with parameter VAR= MEAN +
             % alpha*MEAN^2
 
+            eps1=0.001;
             for t=2:length(yi)
                 lambda=abs(yi(t)-yi(t-1));
                 mean1=lambda;
+                if mean1==0     % guard against zero mean: mean1=0 gives var1=0,
+                    mean1=eps1; % then p1=0/0=NaN and nbinrnd(NaN,NaN)=NaN
+                end             % would enter the replicate data.
                 var1=mean1+factor1*mean1^2;
                 p1=mean1/var1;
                 r1=mean1*p1/(1-p1);
@@ -100,9 +108,13 @@ for real=1:M
             % Negative binomial dist with parameter VAR= MEAN +
             % alpha*MEAN^d
 
+            eps1=0.001;
             for t=2:length(yi)
                 lambda=abs(yi(t)-yi(t-1));
                 mean1=lambda;
+                if mean1==0     % guard against zero mean: mean1=0 gives var1=0,
+                    mean1=eps1; % then p1=0/0=NaN and nbinrnd(NaN,NaN)=NaN
+                end             % would enter the replicate data.
                 var1=mean1+factor1*mean1^d;
                 p1=mean1/var1;
                 r1=mean1*p1/(1-p1);

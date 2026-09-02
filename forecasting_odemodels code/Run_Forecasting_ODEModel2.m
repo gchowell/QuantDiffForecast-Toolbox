@@ -426,7 +426,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         %params0=initialParams(data1(:,2),flag1);
         params0=P_model1d;
 
-        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2]=fit_model(data1,params0,2,DT,model,params,vars,forecastingperiod);
+        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2]=fit_model(data1,params0,5,DT,model,params,vars,forecastingperiod);
 
         fit_model1=[fit_model1 fitcurve_model1];
 
