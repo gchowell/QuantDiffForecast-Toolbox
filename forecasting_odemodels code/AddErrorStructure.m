@@ -2,13 +2,20 @@ function curves=AddErrorStructure(yi,M,dist1,factor1,d)
 
 %yi is cumulative curve
 
-curves=[];
+yi = yi(:);
 
-for real=1:M
+curves = zeros(numel(yi),M);
 
-    yirData=zeros(length(yi),1);
+increments = diff(yi);
 
-    yirData(1)=yi(1);
+for realization = 1:M
+
+    yirData = zeros(numel(yi),1);
+    yirData(1) = yi(1);
+
+    % Existing distribution-specific calculations
+    % Use increments(t-1) instead of repeatedly calculating:
+    % yi(t)-yi(t-1)
 
     switch dist1
 
@@ -139,8 +146,6 @@ for real=1:M
 
     end
 
-    curves=[curves yirData];
 
+    curves(:,realization) = yirData;
 end
-
-
