@@ -2,7 +2,7 @@
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
 %
-function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F2]=fit_model(data1,params0,numstartpoints,DT,modelX,paramsX,varsX,forecastingperiod)
+function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F2,fitDiagnostics]=fit_model(data1,params0,numstartpoints,DT,modelX,paramsX,varsX,forecastingperiod)
 
 global model params vars method1 timevect ydata
 
@@ -98,7 +98,7 @@ typx(z0 == 0) = max(abs(mid(z0 == 0)), 1e-3);
 
 % Optimizer configuration: tight stopping tolerances (1e-6) with a large
 % evaluation budget so runs from different start points converge to the
-% same optimum; central finite differences for accurate gradients on an
+% same optimum; forward finite differences for gradients on an
 % ODE-based objective; TypicalX/ScaleProblem so parameters of very
 % different magnitudes (rates vs. population sizes) stay well
 % conditioned.
@@ -206,43 +206,29 @@ if flagg < 0
     end
 end
 
-% Solve the fitted/forecast curves with the same tight tolerances used
-% inside the objective (parameterSearchODE), so the reported curves
-% correspond to the surface that was actually optimized.
-IC = vars.initial;
-if params.fixI0 == 1
-    IC(vars.fit_index) = I0;  % Fix the initial conditions to I0 for specified indices
-else
-    % If not fixed, use parameter values following the first 'num' parameters
-    IC(vars.fit_index) = P(params.num + 1 : params.num + length(I0));
-end
-
-options_ode = odeset('RelTol',1e-8,'AbsTol',1e-10,'NonNegative',1:length(IC));
-
-% Solve the differential equations using ode15s
-[~, F] = ode15s(model.fc, timevect, IC, options_ode, P, params.extra0);
-F1 = F;
-
-% Build fitted curve (handles levels vs. diffs per variable)
-yfit = zeros(length(ydata), 1);
-currentEnd = 0;
-for j = 1:length(vars.fit_index)
-    if vars.fit_diff(j) == 1
-        fitcurve = abs([F(1, vars.fit_index(j)); diff(F(:, vars.fit_index(j)))]);
-    else
-        fitcurve = F(:, vars.fit_index(j));
-    end
-    yfit(currentEnd + 1 : currentEnd + length(fitcurve)) = fitcurve;
-    currentEnd = currentEnd + length(fitcurve);
-end
-fitcurve = yfit;
-
-% Residuals
+% Finalize the returned parameters with the SAME evaluation as the objective.
+% This replaces the previous separate tighter reconstruction; it does not add
+% another optimization or another calibration solve. The returned fval is now
+% the score of fitcurve under the existing observation/zero-handling rules.
+optimizerFval = fval;
+[fval, fitcurve, F1, IC] = parameterSearchODE(P);
+[options_ode, numericalProfile] = quantdiffODEOptions(IC);
 residual = fitcurve - ydata;
+
+if nargout > 9
+    fitDiagnostics = struct('numericalProfile',numericalProfile, ...
+        'optimizerObjective',optimizerFval, 'finalObjective',fval, ...
+        'objectiveDifference',fval-optimizerFval, ...
+        'parameters',P, 'initialConditions',IC, ...
+        'calibrationTimes',timevect, 'numberOfObservations',numel(ydata), ...
+        'method',method1, 'zeroReplacement',0.001, ...
+        'scoreAndCurveFromSameEvaluation',true, ...
+        'optimizerExitflag',flagg, 'optimizationAttempts',attempt);
+end
 
 % Forecast handling
 if forecastingperiod < 1
-    forecastcurve = residual + ydata;
+    forecastcurve = fitcurve;
     timevect2 = timevect;
     F2 = F1;
 else
@@ -252,20 +238,20 @@ else
     % remainder extend it by forecastingperiod steps.
     timevect2 = (data1(1,1) : (data1(end,1) + forecastingperiod)) * DT;
 
-    [~, F2] = ode15s(model.fc, timevect2, IC, options_ode, P, params.extra0);
-
-    yforecast = zeros(length(vars.fit_index) * length(timevect2), 1);
-    currentEnd = 0;
-    for j = 1:length(vars.fit_index)
-        if vars.fit_diff(j) == 1
-            forecastcurve = abs([F2(1, vars.fit_index(j)); diff(F2(:, vars.fit_index(j)))]);
-        else
-            forecastcurve = F2(:, vars.fit_index(j));
-        end
-        yforecast(currentEnd + 1 : currentEnd + length(forecastcurve)) = forecastcurve;
-        currentEnd = currentEnd + length(forecastcurve);
+    % Preserve the existing full-grid forecast reconstruction, now using the
+    % common policy. Extending tspan can change the adaptive mesh: the
+    % calibration portion of F2 need not be bitwise identical to F1. AICc is
+    % calculated from F1/fitcurve, not from this extended-horizon solve.
+    [tout2, F2] = ode15s(model.fc, timevect2, IC, options_ode, P, params.extra0);
+    if size(F2,1) ~= numel(timevect2) || size(F2,2) ~= numel(IC) || ...
+            numel(tout2) ~= numel(timevect2) || ...
+            ~isequal(tout2(:),timevect2(:)) || ...
+            ~isreal(F2) || any(~isfinite(F2(:)))
+        error('QuantDiffForecast:InvalidForecastTrajectory', ...
+            'The forecast solve must return complete finite real states at the requested times.');
     end
-    forecastcurve = yforecast;
+    forecastcurve = quantdiffObservationCurve(F2,vars);
+
 end
 
 end % main function

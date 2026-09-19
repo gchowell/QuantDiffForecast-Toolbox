@@ -246,6 +246,8 @@ if (tend1+windowsize1-1) > length(data(:,1))
 
 end
 
+% Numerical-policy provenance; retained for every rolling window and draw.
+numericalAudit = struct('profile',[], 'originalFits',{{}}, 'bootstrapFits',{{}});
 AICcs=[];
 paramss=[];
 composite12=[];
@@ -292,7 +294,9 @@ for i=tstart1:1:tend1  %rolling window analysis
     end
 
 
-    [P_model1d,residual_model1, fitcurve_model1d, forecastcurve_model1, timevect2, initialguess,fval]=fit_model(data1,params0,numstartpoints,DT,model,params,vars,0);
+    [P_model1d,residual_model1, fitcurve_model1d, forecastcurve_model1, timevect2, initialguess,fval,~,~,fitDiagnostics_model1d]=fit_model(data1,params0,numstartpoints,DT,model,params,vars,0);
+    numericalAudit.profile = fitDiagnostics_model1d.numericalProfile;
+    numericalAudit.originalFits{cc1} = fitDiagnostics_model1d;
 
     [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,length(ydata))
 
@@ -400,7 +404,8 @@ for i=tstart1:1:tend1  %rolling window analysis
         %params0=initialParams(data1(:,2),flag1);
         params0=P_model1d;
 
-        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2]=fit_model(data1,params0,1,DT,model,params,vars,forecastingperiod);
+        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2,fitDiagnostics_model1]=fit_model(data1,params0,1,DT,model,params,vars,forecastingperiod);
+        numericalAudit.bootstrapFits{cc1,j} = fitDiagnostics_model1;
 
         fit_model1=[fit_model1 fitcurve_model1];
 
@@ -438,7 +443,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     fullFilePath = fullfile(outputDir, fileName);
 
-    save(fullFilePath, 'Phatss_model1', 'fvals_model1', '-mat');
+    save(fullFilePath, 'Phatss_model1', 'fvals_model1', 'numericalAudit', '-mat');
 
     'bootstrapping completed'
 
@@ -1030,7 +1035,7 @@ end
 
 fileName = strcat('parameters-ODEModel-',cadfilename1,'-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat');
 fullFilePath = fullfile(outputDir, fileName);
-save(fullFilePath, 'param_estims', '-mat');
+save(fullFilePath, 'param_estims', 'numericalAudit', '-mat');
 
 % <=============================================================================================>
 % <================= Save csv file with parameters from rolling window analysis ====================================>

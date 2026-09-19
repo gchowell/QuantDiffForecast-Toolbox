@@ -269,6 +269,8 @@ if (tend1+windowsize1-1) > length(data(:,1))
 
 end
 
+% Numerical-policy provenance; retained for every rolling window and draw.
+numericalAudit = struct('profile',[], 'originalFits',{{}}, 'bootstrapFits',{{}});
 AICcs=[];
 paramss=[];
 composite12=[];
@@ -318,7 +320,9 @@ for i=tstart1:1:tend1  %rolling window analysis
     end
 
 
-    [P_model1d,residual_model1, fitcurve_model1d, forecastcurve_model1, timevect2, initialguess,fval]=fit_model(data1,params0,numstartpoints,DT,model,params,vars,0);
+    [P_model1d,residual_model1, fitcurve_model1d, forecastcurve_model1, timevect2, initialguess,fval,~,~,fitDiagnostics_model1d]=fit_model(data1,params0,numstartpoints,DT,model,params,vars,0);
+    numericalAudit.profile = fitDiagnostics_model1d.numericalProfile;
+    numericalAudit.originalFits{cc1} = fitDiagnostics_model1d;
 
     [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,length(ydata))
 
@@ -426,7 +430,8 @@ for i=tstart1:1:tend1  %rolling window analysis
         %params0=initialParams(data1(:,2),flag1);
         params0=P_model1d;
 
-        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2]=fit_model(data1,params0,1,DT,model,params,vars,forecastingperiod);
+        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2,fitDiagnostics_model1]=fit_model(data1,params0,1,DT,model,params,vars,forecastingperiod);
+        numericalAudit.bootstrapFits{cc1,j} = fitDiagnostics_model1;
 
         fit_model1=[fit_model1 fitcurve_model1];
 
@@ -1052,4 +1057,4 @@ end
 
 fileName = sprintf('results_%s%s.mat', window_file_token, replicate_file_token);
 fullFilePath = fullfile(outputDir, fileName);
-save(fullFilePath, 'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', '-mat');
+save(fullFilePath, 'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', '-mat');
