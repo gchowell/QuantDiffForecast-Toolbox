@@ -311,46 +311,6 @@ This example treats `C` as an accumulating state and fits its increments. Retain
 
 Composite functions receive a matrix of parameter draws, with one draw per row. See [`R0s.m`](forecasting_odemodels%20code/R0s.m) for an example. Verify callback signatures and dependencies before using other bundled or contributed models.
 
-## Reproducibility and implementation notes
-
-### Reproducibility
-
-Set and record the RNG state **before** each analysis. Archive the input data, edited options function, custom model, source revision, MATLAB release, installed toolbox versions, and outputs together. A fixed seed helps reproduce serial runs but does not establish equivalence across software versions or parallel configurations.
-
-Inspect `numericalAudit` in the MAT files for numerical-policy and fit diagnostics. Check convergence, parameter-bound hits, interval stability as `B` increases, and sensitivity to optimization starts. MultiStart explores multiple local solutions; it does not certify a global optimum.
-
-### Implementation notes
-
-The following notes describe the current source, not fixes applied by this README. They are particularly important for uncertainty reporting and model comparison.
-
-<details>
-<summary>Bootstrap fitting and initial observations</summary>
-
-Bootstrap refits use a smaller start-point budget than the initial fit, and optimizer failures are not automatically excluded from bootstrap summaries. Inspect warnings and `numericalAudit` before accepting the resulting intervals. A feasible trajectory alone does not demonstrate optimization convergence.
-
-The bootstrap also restores the original first observation of each fitted series, including when `params.fixI0 = 0`. Interpret its uncertainty as conditional on that first observation; estimating an initial-state parameter does not make the first observation resampled. These conventions are implemented in the [forecasting runner](forecasting_odemodels%20code/Run_Forecasting_ODEModel.m) and [fitter](forecasting_odemodels%20code/fit_model.m).
-
-</details>
-
-<details>
-<summary>Forecast summaries and information criteria</summary>
-
-Current point-error metrics use the median of the latent bootstrap trajectories, whereas the forecast CSV uses the predictive median after adding observation noise. They need not agree. Gaussian/Laplace draws can also produce inconsistent summaries because negative-value clipping is not applied identically to medians, bounds, and WIS inputs. Do not assume a score can be reconstructed from an exported median alone.
-
-Before interpreting AICc, ensure `n > k + 1`, where `n` is the number of fitted scalar observations and `k` includes all estimated parameters and relevant observation-model parameters. Compare models fitted to the same data with compatible likelihood definitions. The current Laplace branch passes absolute-deviation loss to AICc rather than the fitted-scale Laplace negative log-likelihood; do not use that score for model selection without correcting the calculation.
-
-See [forecast scoring](forecasting_odemodels%20code/computeforecastperformance.m), [WIS](forecasting_odemodels%20code/computeWIS.m), and [AICc](forecasting_odemodels%20code/getAICc.m).
-
-</details>
-
-<details>
-<summary>Interval-ratio diagnostics and advanced identifiability workflows</summary>
-
-The legacy `SCI` outputs are not computed identically across entry points. For individual parameters, the main fitting runner uses `log10(UB/(LB + 0.001))`, while the forecasting runner uses `log10(UB/LB)`. The latter is the confidence-interval width on a base-10 logarithmic scale when `0 < LB <= UB`. Neither should be interpreted as a universal identifiability classification, and nonpositive interval endpoints need separate treatment.
-
-The repository also contains practical-identifiability simulation scripts. Some reference options files or model dependencies not included in this snapshot—for example, `plotPracticalIdentifiabilityResults.m` selects `options_forecast_PII_EXPO_r_dist1_3`. Configure a complete set of dependencies before running these advanced workflows; they are not part of the quick start.
-
-</details>
 
 ## Troubleshooting and support
 
