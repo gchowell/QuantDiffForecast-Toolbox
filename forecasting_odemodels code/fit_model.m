@@ -40,7 +40,7 @@ switch method1
     case 5
         % Case 5 has specific limits for d, assuming it should be >=1
         LBe = [1e-8, 0.6];
-        UBe = [1e4, 1e3];
+        UBe = [1e4, 5];
 end
 
 % Configure bounds based on whether initial conditions are fixed
