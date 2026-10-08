@@ -1,4 +1,4 @@
-function   [AICcs,performanceC,performanceF,forecast_model1,forecast_model12,data1,datalatest,Ys]=Run_Forecasting_ODEModel(options_pass,tstart1_pass,tend1_pass,windowsize1_pass,forecastingperiod_pass,replicate_id,output_dir_pass)
+function   [AICcs,performanceC,performanceF,forecast_model1,forecast_model12,data1,datalatest,Ys]=Run_Forecasting_ODEModel2(options_pass,tstart1_pass,tend1_pass,windowsize1_pass,forecastingperiod_pass,replicate_id,output_dir_pass)
 
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>
