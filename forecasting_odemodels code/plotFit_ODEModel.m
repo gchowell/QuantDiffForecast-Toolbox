@@ -450,7 +450,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,j)=std(Phatss_model1(:,j))/sqrt(M);
 
-        SCI(cc1,j)=log10(param_estims(j,3,cc1)./param_estims(j,2,cc1));
+        SCI(cc1,j)=log10(param_estims(j,3,cc1))-log10(param_estims(j,2,cc1));
 
     end
 
@@ -460,7 +460,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,params.num+j)=std(Phatss_model1(:,params.num+j))/sqrt(M); %X0
 
-        SCI(cc1,params.num+j)=log10(param_estims(params.num+j,3,cc1)./param_estims(params.num+j,2,cc1));
+        SCI(cc1,params.num+j)=log10(param_estims(params.num+j,3,cc1))-log10(param_estims(params.num+j,2,cc1));
 
     end
 
@@ -471,15 +471,15 @@ for i=tstart1:1:tend1  %rolling window analysis
     if method1==3 | method1==4
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
 
-        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1)./param_estims(params.num+j+1,2,cc1));
+        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1))-log10(param_estims(params.num+j+1,2,cc1));
 
     elseif method1==5
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
         MCEs(cc1,params.num+j+2)=std(Phatss_model1(:,params.num+j+2))/sqrt(M); %d
 
-        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1)./param_estims(params.num+j+1,2,cc1));
+        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1))-log10(param_estims(params.num+j+1,2,cc1));
 
-        SCI(cc1,params.num+j+2)=log10(param_estims(params.num+j+2,3,cc1)./param_estims(params.num+j+2,2,cc1));
+        SCI(cc1,params.num+j+2)=log10(param_estims(params.num+j+2,3,cc1))-log10(param_estims(params.num+j+2,2,cc1));
     end
 
 
