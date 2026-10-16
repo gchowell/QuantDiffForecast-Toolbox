@@ -225,7 +225,6 @@ Let `mu` denote the model-predicted observation, `alpha` the fitted negative-bin
 
 **Changing `dist1` with `method1 = 0` does not change the objective into weighted least squares or maximum likelihood.** It changes the observation-noise model used after least-squares fitting. Also, `dist1 = 2` is not an instruction to use `method1 = 2`; that objective is not supported by the current helper.
 
-See [the objective implementation](forecasting_odemodels%20code/quantdiffObjectiveValue.m) and [observation-noise generator](forecasting_odemodels%20code/AddErrorStructure.m) for the implemented conventions.
 
 ## Rolling windows and forecast horizons
 
@@ -256,7 +255,7 @@ Results are written under `forecasting_odemodels code/output`. Filenames encode 
 | `parameters-rollingwindow-*.csv` | Bootstrap parameter medians and 2.5th/97.5th percentiles. Some column labels say “mean,” although the calculation uses a median. |
 | `parameters-composite-*.csv` | Corresponding summaries for a derived quantity, when configured. Its central summary is also a median despite the “mean” label. |
 | `MCSEs-rollingwindow-*.csv` | `std(bootstrap draws)/sqrt(B)` summaries; these are not parameter confidence intervals or Monte Carlo errors of the median. |
-| `SCIs-rollingwindow-*.csv` | Legacy log interval-ratio diagnostics; see the implementation notes before interpretation. |
+| `SCIs-rollingwindow-*.csv` | Legacy log interval-ratio diagnostics. |
 | `AICc-*.csv` | Columns `time`, `AICc`, `AICc part1`, `AICc part2`, and `numparams`; no separate AIC or BIC columns are produced here. |
 | `Forecast-model_name-*.csv` | Columns `time`, `data`, `median`, `LB`, and `UB`; the bounds are 2.5th/97.5th predictive percentiles. May include both calibration and forecast periods. |
 | `performance-calibration-*.csv` | Columns `time`, `calibration_period`, `MAE`, `MSE`, `Coverage 95%PI`, and `WIS`. |
