@@ -15,7 +15,7 @@ The repository includes an SEIR example using the 1918 influenza time series fro
 - **Forecast evaluation:** calibration and held-out forecast summaries, including absolute and squared error, prediction-interval coverage, and weighted interval score (WIS).
 - **Flexible workflows:** user-defined ODEs, selected fixed parameters, multiple observed series, derived quantities such as the basic reproduction number, and rolling calibration windows.
 
-Start with the example below, then see [Using your own data](#using-your-own-data) and [Adding a model](#adding-a-model). Review the [implementation notes](#implementation-notes) before interpreting uncertainty or comparing model scores.
+Start with the example below, then see [Using your own data](#using-your-own-data) and [Adding a model](#adding-a-model). 
 
 ## Requirements and installation
 
