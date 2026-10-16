@@ -1057,3 +1057,11 @@ end
 fileName = sprintf('results_%s%s.mat', window_file_token, replicate_file_token);
 fullFilePath = fullfile(outputDir, fileName);
 save(fullFilePath, 'paramss', 'performanceC', 'SCI', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', '-mat');
+
+% Print bootstrap counts only; do not change fitting or retained results.
+requestedBootstrap = M * numel(numericalAudit.originalFits);
+acceptedBootstrap = sum(cellfun(@(d) d.optimizerExitflag > 0 && ...
+    isfinite(d.finalObjective), numericalAudit.bootstrapFits(:)));
+fprintf('\nRequested bootstrap datasets: %d\n', requestedBootstrap);
+fprintf('Accepted bootstrap datasets: %d\n', acceptedBootstrap);
+fprintf('Unresolved bootstrap datasets: %d\n\n', requestedBootstrap - acceptedBootstrap);

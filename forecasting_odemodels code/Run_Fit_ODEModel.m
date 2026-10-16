@@ -1035,3 +1035,11 @@ fileName=strcat('AICc-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-
 
 fullFilePath = fullfile(outputDir, fileName);
 writetable(T, fullFilePath);
+
+% Print bootstrap counts only; do not change fitting or retained results.
+requestedBootstrap = M * numel(numericalAudit.originalFits);
+acceptedBootstrap = sum(cellfun(@(d) d.optimizerExitflag > 0 && ...
+    isfinite(d.finalObjective), numericalAudit.bootstrapFits(:)));
+fprintf('\nRequested bootstrap datasets: %d\n', requestedBootstrap);
+fprintf('Accepted bootstrap datasets: %d\n', acceptedBootstrap);
+fprintf('Unresolved bootstrap datasets: %d\n\n', requestedBootstrap - acceptedBootstrap);

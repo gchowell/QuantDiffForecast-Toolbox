@@ -1138,3 +1138,11 @@ T.Properties.VariableNames(1:5) = {'time','AICc','AICc part1','AICc part2','nump
 fileName = strcat('AICc-','model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
 fullFilePath = fullfile(outputDir, fileName);
 writetable(T, fullFilePath);
+
+% Print bootstrap counts only; do not change fitting or retained results.
+requestedBootstrap = M * numel(numericalAudit.originalFits);
+acceptedBootstrap = sum(cellfun(@(d) d.optimizerExitflag > 0 && ...
+    isfinite(d.finalObjective), numericalAudit.bootstrapFits(:)));
+fprintf('\nRequested bootstrap datasets: %d\n', requestedBootstrap);
+fprintf('Accepted bootstrap datasets: %d\n', acceptedBootstrap);
+fprintf('Unresolved bootstrap datasets: %d\n\n', requestedBootstrap - acceptedBootstrap);
