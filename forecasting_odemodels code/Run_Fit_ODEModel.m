@@ -210,6 +210,10 @@ else
 
 end
 
+% PII_box = log10(UB/LB) of the optimizer box for each parameter (max attainable PII);
+% PII_ratio = SCI./PII_box (~1 => the bootstrap CI is the box, PII censored; NaN => pinned).
+PII_box  =nan(size(SCI));
+PII_ratio=nan(size(SCI));
 
 RMSECSS=[];
 MSECSS=[];
@@ -278,6 +282,11 @@ for i=tstart1:1:tend1  %rolling window analysis
     [P_model1d,residual_model1, fitcurve_model1d, forecastcurve_model1, timevect2, initialguess,fval,~,~,fitDiagnostics_model1d]=fit_model(data1,params0,numstartpoints,DT,model,params,vars,0);
     numericalAudit.profile = fitDiagnostics_model1d.numericalProfile;
     numericalAudit.originalFits{cc1} = fitDiagnostics_model1d;
+
+    % Optimizer box used for the point fit on the real data (same box the bootstrap refits use,
+    % except the data-dependent X0 upper bound). Pinned entries (LB==UB) give PII_box=0 -> ratio NaN.
+    LBbox = fitDiagnostics_model1d.LB;  UBbox = fitDiagnostics_model1d.UB;                        % NEW
+    PII_box(cc1,:) = log10(UBbox(1:size(SCI,2))) - log10(LBbox(1:size(SCI,2)));                   % NEW
 
     [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,length(ydata))
 
@@ -439,7 +448,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     outputFilePath = fullfile(outputDir, outputFileName);
 
-    save(outputFilePath, 'Phatss_model1', 'fvals_model1', 'numericalAudit', '-mat');
+    save(outputFilePath, 'Phatss_model1', 'fvals_model1', 'numericalAudit', 'LBbox', 'UBbox', '-mat');
 
     'bootstrapping completed'
 
@@ -685,6 +694,9 @@ for i=tstart1:1:tend1  %rolling window analysis
         SCI(cc1,params.num+j+2)=log10(param_estims(params.num+j+2,3,cc1))-log10(param_estims(params.num+j+2,2,cc1));
     end
 
+    % fraction of the box width (log10 scale) still occupied by the bootstrap 95% CI
+    PII_ratio(cc1,:) = SCI(cc1,:) ./ PII_box(cc1,:);                                               % NEW
+
 
     if isempty(params.composite)==0
         compositetemp=params.composite(Phatss_model1);
@@ -781,7 +793,9 @@ for i=tstart1:1:tend1  %rolling window analysis
     paramss=[paramss;params1];
 
     % <=======================================================================================>
-    % <======================= Plot neg. loglikelihood profiles of the parameters =============>
+    % Bootstrap parameter estimates versus replicate-specific objective values.
+    % Each point represents a fit to a different bootstrap dataset.
+    % This is a descriptive diagnostic, not a profile-likelihood analysis.
     % <========================================================================================>
 
     if printscreen1
@@ -800,7 +814,7 @@ for i=tstart1:1:tend1  %rolling window analysis
             plot(profile1(:,1),profile1(:,2),'bo')
             hold on
 
-            % Apply interpolation
+            % Smooth the bootstrap scatter for visualization only.
             if params.fixed(j)==0
 
                 span = 0.25; % Fraction of data used for local smoothing (adjust as needed)
@@ -824,7 +838,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         end
 
         if printscreen1
-            ylabel('Objective function')
+            ylabel('Bootstrap fit objective function')
 
             title(cad1)
 
@@ -923,7 +937,7 @@ fileName = strcat('parameters-ODEModel-',cadfilename1,'-model_name-',model.name,
 
 fullFilePath = fullfile(outputDir, fileName);
 
-save(fullFilePath, 'param_estims', 'numericalAudit', '-mat');
+save(fullFilePath, 'param_estims', 'numericalAudit', 'PII_box', 'PII_ratio', '-mat');    
 
 
 % <=============================================================================================>
@@ -1035,6 +1049,24 @@ fileName=strcat('AICc-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-
 
 fullFilePath = fullfile(outputDir, fileName);
 writetable(T, fullFilePath);
+
+% PII_box = log10(UB/LB) of the optimizer box; PII_ratio = SCI/PII_box
+% (~1 => CI equals the box, PII censored by the bounds; NaN => pinned parameter).
+% Self-contained: builds its own table and filename (does not reuse T / fullFilePath).
+
+labsPII = paramslabels1(1:3:end);                      % one label per parameter, same as the SCIs file
+suffixPII = strcat('-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1), ...
+    '-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1), ...
+    '-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
+
+Tpii = array2table([(tstart1:1:tend1)' PII_box]);
+Tpii.Properties.VariableNames = [{'time'} labsPII(1:size(PII_box,2))];
+writetable(Tpii, fullfile(outputDir, strcat('PIIbox-rollingwindow',suffixPII)));
+
+Tpii = array2table([(tstart1:1:tend1)' PII_ratio]);
+Tpii.Properties.VariableNames = [{'time'} labsPII(1:size(PII_ratio,2))];
+writetable(Tpii, fullfile(outputDir, strcat('PIIratio-rollingwindow',suffixPII)));
+
 
 % Print bootstrap counts only; do not change fitting or retained results.
 requestedBootstrap = M * numel(numericalAudit.originalFits);

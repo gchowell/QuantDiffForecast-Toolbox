@@ -224,6 +224,9 @@ if nargout > 9
         'method',method1, 'zeroReplacement',0.001, ...
         'scoreAndCurveFromSameEvaluation',true, ...
         'optimizerExitflag',flagg, 'optimizationAttempts',attempt);
+
+    fitDiagnostics.LB = LB;   % full optimizer box [params.LB, X0 bounds, LBe] (post-flipMask)   % NEW
+    fitDiagnostics.UB = UB;   % used downstream for PII_box = log10(UB) - log10(LB)              % NEW
 end
 
 % Forecast handling
