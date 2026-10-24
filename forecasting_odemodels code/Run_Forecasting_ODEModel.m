@@ -226,6 +226,14 @@ end
 PII_box  =nan(size(SCI));
 PII_ratio=nan(size(SCI));
 
+% Bound-hitting fractions (bound-censoring diagnostic complementing PII_ratio):
+% share of bootstrap draws within boundHitTol (relative, 0.1%) of LB and of UB,
+% evaluated against each draw's own optimizer box. Catches pile-ups at ONE bound
+% that the 2.5/97.5 quantiles behind the PII hide. NaN => pinned parameter.
+boundHitTol = 1e-3;
+fracLB = nan(size(SCI));
+fracUB = nan(size(SCI));
+
 RMSECSS=[];
 MSECSS=[];
 MAECSS=[];
@@ -392,6 +400,11 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     Phatss_model1=zeros(M,params.num+length(vars.fit_index)+2);
 
+    % Per-draw optimizer box of the bootstrap refits (the X0 upper bound is
+    % data-dependent when params.fixI0==0, so it differs across replicates).
+    LBboot=nan(M,params.num+length(vars.fit_index)+2);
+    UBboot=nan(M,params.num+length(vars.fit_index)+2);
+
     fvals_model1=zeros(M,1);
 
     f_model1_sims=[];
@@ -437,6 +450,9 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         Phatss_model1(j,:)=P_model1;
 
+        LBboot(j,:)=fitDiagnostics_model1.LB(1:size(Phatss_model1,2));
+        UBboot(j,:)=fitDiagnostics_model1.UB(1:size(Phatss_model1,2));
+
         fvals_model1(j,1)= fval;
 
     end %end bootstrapping loop
@@ -453,7 +469,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     fullFilePath = fullfile(outputDir, fileName);
 
-    save(fullFilePath, 'Phatss_model1', 'fvals_model1', 'numericalAudit', 'LBbox', 'UBbox', '-mat');
+    save(fullFilePath, 'Phatss_model1', 'fvals_model1', 'numericalAudit', 'LBbox', 'UBbox', 'LBboot', 'UBboot', '-mat');
 
     'bootstrapping completed'
 
@@ -814,6 +830,10 @@ for i=tstart1:1:tend1  %rolling window analysis
     % fraction of the box width (log10 scale) still occupied by the bootstrap 95% CI
     PII_ratio(cc1,:) = SCI(cc1,:) ./ PII_box(cc1,:);
 
+    % fraction of bootstrap draws within boundHitTol (relative) of LB / UB of their own box
+    [fracLB(cc1,:), fracUB(cc1,:)] = boundHitFractions(Phatss_model1(:,1:size(SCI,2)), ...
+        LBboot(:,1:size(SCI,2)), UBboot(:,1:size(SCI,2)), boundHitTol);
+
     if isempty(params.composite)==0
         compositetemp=params.composite(Phatss_model1);
         composite12=[composite12;[median(compositetemp) quantile(compositetemp,0.025) quantile(compositetemp,0.975)]]
@@ -1050,7 +1070,7 @@ end
 fileName = strcat('parameters-ODEModel-',cadfilename1,'-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat');
 fullFilePath = fullfile(outputDir, fileName);
 
-save(fullFilePath, 'param_estims', 'numericalAudit', 'PII_box', 'PII_ratio', '-mat');
+save(fullFilePath, 'param_estims', 'numericalAudit', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', '-mat');
 
 % <=============================================================================================>
 % <================= Save csv file with parameters from rolling window analysis ====================================>
@@ -1142,6 +1162,17 @@ writetable(Tpii, fullfile(outputDir, strcat('PIIbox-rollingwindow',suffixPII)));
 Tpii = array2table([(tstart1:1:tend1)' PII_ratio]);
 Tpii.Properties.VariableNames = [{'time'} labsPII(1:size(PII_ratio,2))];
 writetable(Tpii, fullfile(outputDir, strcat('PIIratio-rollingwindow',suffixPII)));
+
+% Bound-hitting fractions: share of bootstrap draws within boundHitTol (relative, 0.1%)
+% of LB (fracLB) and of UB (fracUB) of their own optimizer box. A large value with a
+% moderate PII_ratio flags one-sided censoring the quantile-based PII does not show.
+Tpii = array2table([(tstart1:1:tend1)' fracLB]);
+Tpii.Properties.VariableNames = [{'time'} labsPII(1:size(fracLB,2))];
+writetable(Tpii, fullfile(outputDir, strcat('PIIfracLB-rollingwindow',suffixPII)));
+
+Tpii = array2table([(tstart1:1:tend1)' fracUB]);
+Tpii.Properties.VariableNames = [{'time'} labsPII(1:size(fracUB,2))];
+writetable(Tpii, fullfile(outputDir, strcat('PIIfracUB-rollingwindow',suffixPII)));
 
 
 % <=============================================================================================>
