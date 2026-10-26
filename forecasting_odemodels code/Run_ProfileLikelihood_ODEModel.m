@@ -113,6 +113,11 @@ function PL = Run_ProfileLikelihood_ODEModel(options_pass, tstart1_pass, windows
 %                        better optimum                               (default 2)
 %        .logSpacing     walk in log10 scale when LB > 0              (default true)
 %        .printscreen    1 = draw figure and save PNG                 (default 1)
+%        .plotCols       max tiles per row of the profile figure; the grid is
+%                        rebalanced so the last row is as full as possible, e.g.
+%                        6 profiles -> 2x3, 8 -> 2x4, 9 -> 3x3            (default 4)
+%        .plotLayout     explicit [nrows ncols] for the profile figure; overrides
+%                        plotCols ([] = automatic)                    (default [])
 %        .innerLogScale  log10 coordinates for every fit made here   (default true)
 %        .innerScaleObjective fmincon objective normalization        (default false)
 %        .innerPolish    Nelder-Mead polish of every fit made here   (default true)
@@ -192,7 +197,8 @@ def = struct('paramIndex', [], 'numstartpoints', min(max(2, numstartpoints_INP),
     'targetFirstD', [], 'h0', 0.01, 'maxPoints', 40, 'maxRetract', 6, 'maxFailures', 3, ...
     'stopFactor', 2, 'refineIters', 10, 'refineTolD', 0.05, 'refTol', 0.1, 'flatTol', 0.1, 'refitFactor', 5, 'noiseRefits', 3, ...
     'minCleanPts', 5, 'boundTol', 1e-3, 'maxRestarts', 2, 'logSpacing', true, 'printscreen', 1, ...
-    'innerLogScale', true, 'innerScaleObjective', false, 'innerPolish', true, 'odeTol', [], 'simulate', []);
+    'innerLogScale', true, 'innerScaleObjective', false, 'innerPolish', true, 'odeTol', [], 'simulate', [], ...
+    'plotCols', 4, 'plotLayout', []);
 fn = fieldnames(def);
 for k = 1:numel(fn)
     if ~isfield(opts, fn{k}) || isempty(opts.(fn{k}))
@@ -215,6 +221,10 @@ validateattributes(windowsize1, {'numeric'}, {'scalar', 'integer', '>=', 2}, mfi
 validateattributes(tstart1, {'numeric'}, {'scalar', 'integer', '>=', 1}, mfilename, 'tstart1');
 if ~isempty(opts.odeTol)
     validateattributes(opts.odeTol, {'numeric'}, {'vector', 'numel', 2, '>', 0}, mfilename, 'opts.odeTol');
+end
+validateattributes(opts.plotCols, {'numeric'}, {'scalar', 'integer', '>=', 1}, mfilename, 'opts.plotCols');
+if ~isempty(opts.plotLayout)
+    validateattributes(opts.plotLayout, {'numeric'}, {'vector', 'numel', 2, 'integer', '>=', 1}, mfilename, 'opts.plotLayout');
 end
 if numel(params.LB) ~= params.num || numel(params.UB) ~= params.num || numel(params.initial) ~= params.num || numel(params.fixed) ~= params.num
     error('ProfileLikelihood:paramsLength', 'params.LB, UB, initial and fixed must all have %d entries.', params.num);
@@ -502,39 +512,114 @@ writetable(S, fullfile(outputDir, ['PLsummary-' suffix]));
 save(fullfile(outputDir, ['PL-' strrep(suffix, '.csv', '.mat')]), 'PL', '-mat');
 
 if opts.printscreen
-    figure('Color', 'white', 'Position', [100 100 350 * nk 320]);
-    tiledlayout(1, nk, 'Padding', 'compact', 'TileSpacing', 'compact');
-    for k = 1:nk
-        nexttile; hold on
-        p  = PL.param(k);
-        ok = isfinite(p.D);
-        plot(p.theta(ok), p.D(ok), 'b-o', 'LineWidth', 1.5, 'MarkerSize', 4, 'MarkerFaceColor', 'b');
-        yline(threshold, 'r--', 'LineWidth', 1.2);
-        plot(p.mle, 0, 'kp', 'MarkerSize', 10, 'MarkerFaceColor', 'y');
-        for s = 1:2
-            if isfinite(p.CI(s)), xline(p.CI(s), 'k:'); end
-        end
-        if simulated && p.index <= params.num
-            xline(truth(p.index), '-', 'true', 'Color', [0.7 0.33 0.04], 'LineWidth', 1.2, 'LabelOrientation', 'horizontal');
-        end
-        if min(p.theta) > 0 && max(p.theta) / min(p.theta) > 10, set(gca, 'XScale', 'log'); end
-        if numel(p.theta) < 2 || max(p.theta) == min(p.theta)
-            pad = max(abs(p.mle) * 0.05, 1e-6); xlim([p.mle - pad, p.mle + pad]);   % single-point (unresolved) profile
-        end
-        xlabel(p.label, 'Interpreter', 'tex');
-        ylabel(sprintf('-2 \\Delta log L   (dashed: \\chi^2_1(%.2f))', 1 - opts.alpha), 'Interpreter', 'tex');
-        title(sprintf('%s = %.3g  %.0f%% PL [%s, %s]   FI = %.2g', p.label, p.mle, 100 * (1 - opts.alpha), ...
-            fmtEnd(p.CI(1), p.stopReason{1}), fmtEnd(p.CI(2), p.stopReason{2}), p.FI), 'Interpreter', 'tex');
-        ytop = max(1.5 * threshold, min(max([p.D(ok); 0]) * 1.1, 6 * threshold));
-        ylim([0 ytop]);
-        box on; set(gca, 'FontSize', GetAdjustedFontSize);
-    end
-    outfile = fullfile(outputDir, ['PLprofiles-' strrep(suffix, '.csv', '')]);
-    print(gcf, outfile, '-dpng', '-r200');
-    fprintf('\nSaved: %s.png\n', outfile);
+    plotProfiles(PL, params, simulated, truth, opts, outputDir, suffix);
 end
 
 end % main function
+
+
+% <============================================================================>
+% <=================== Figure: grid of profiles ==============================>
+% <============================================================================>
+
+function plotProfiles(PL, params, simulated, truth, opts, outputDir, suffix)
+% One tile per profiled slot, arranged in a grid of at most opts.plotCols columns
+% (or the explicit [nrows ncols] in opts.plotLayout) instead of a single row that
+% grows without limit. All tiles share one y-limit so flat and sharply curved
+% profiles can be compared at a glance; the y-label, the legend and the run
+% description appear once for the whole figure; each tile carries a two-line
+% title (estimate; interval and FI) colored by the profile status.
+
+nk        = numel(PL.param);
+threshold = PL.threshold;
+level     = 100 * (1 - opts.alpha);
+
+if ~isempty(opts.plotLayout)
+    nrows = opts.plotLayout(1); ncols = opts.plotLayout(2);
+    if nrows * ncols < nk
+        error('ProfileLikelihood:plotLayout', 'opts.plotLayout = [%d %d] offers fewer tiles than the %d profiles.', nrows, ncols, nk);
+    end
+else
+    ncols = min(nk, opts.plotCols);
+    nrows = ceil(nk / ncols);
+    ncols = ceil(nk / nrows);                        % rebalance so the last row is as full as possible
+end
+
+% Figure size: about 320 x 270 px per tile plus margins, capped to the screen.
+tileW = 320; tileH = 270;
+figW  = 90 + tileW * ncols;  figH = 130 + tileH * nrows;
+scr   = get(0, 'ScreenSize');
+figW  = min(figW, 0.92 * scr(3)); figH = min(figH, 0.88 * scr(4));
+fig   = figure('Color', 'white', 'Position', [60 60 figW figH], 'Name', sprintf('Profile likelihoods - %s', PL.model));
+tl    = tiledlayout(fig, nrows, ncols, 'Padding', 'compact', 'TileSpacing', 'compact');
+fs    = GetAdjustedFontSize;
+
+% Shared y-limit (each tile would otherwise pick its own, which makes a flat
+% profile look curved in isolation); capped at 6x threshold as before.
+ytop = 1.5 * threshold;
+for k = 1:nk
+    Dk = PL.param(k).D(isfinite(PL.param(k).D));
+    ytop = max(ytop, min(max([Dk; 0]) * 1.1, 6 * threshold));
+end
+
+green = [0 0.5 0]; orange = [0.85 0.45 0]; gray = [0.45 0.45 0.45]; red = [0.75 0 0];
+
+hLeg = []; legText = {};
+for k = 1:nk
+    ax = nexttile(tl); hold(ax, 'on')
+    p  = PL.param(k);
+    ok = isfinite(p.D);
+    hProf = plot(ax, p.theta(ok), p.D(ok), 'b-o', 'LineWidth', 1.5, 'MarkerSize', 4, 'MarkerFaceColor', 'b');
+    hThr  = yline(ax, threshold, 'r--', 'LineWidth', 1.2);
+    hMle  = plot(ax, p.mle, 0, 'kp', 'MarkerSize', 10, 'MarkerFaceColor', 'y');
+    hCI = [];
+    for s = 1:2
+        if isfinite(p.CI(s)), hCI = xline(ax, p.CI(s), 'k:', 'LineWidth', 1.0); end
+    end
+    hTrue = [];
+    if simulated && p.index <= params.num
+        hTrue = xline(ax, truth(p.index), '-', 'Color', [0.7 0.33 0.04], 'LineWidth', 1.2);
+    end
+    if min(p.theta) > 0 && max(p.theta) / min(p.theta) > 10, set(ax, 'XScale', 'log'); end
+    if numel(p.theta) < 2 || max(p.theta) == min(p.theta)
+        pad = max(abs(p.mle) * 0.05, 1e-6); xlim(ax, [p.mle - pad, p.mle + pad]);   % single-point (unresolved) profile
+    end
+    ylim(ax, [0 ytop]);
+    xlabel(ax, p.label, 'Interpreter', 'tex');
+    if mod(k - 1, ncols) ~= 0, set(ax, 'YTickLabel', []); end     % y tick labels on the first column only
+
+    st = p.status;
+    if startsWith(st, 'unresolved'),             col = red;
+    elseif startsWith(st, 'numerically flat'),   col = gray;
+    elseif startsWith(st, 'finite interval') && ~contains(st, 'nuisance-bound'), col = green;
+    else,                                        col = orange;    % bound-limited, or finite with nuisance-bound activity
+    end
+    title(ax, {sprintf('%s = %.3g', p.label, p.mle), ...
+        sprintf('%.0f%% PL [%s, %s]   FI = %.2g', level, fmtEnd(p.CI(1), p.stopReason{1}), fmtEnd(p.CI(2), p.stopReason{2}), p.FI)}, ...
+        'Interpreter', 'tex', 'FontSize', fs, 'FontWeight', 'normal', 'Color', col);
+    box(ax, 'on'); set(ax, 'FontSize', fs);
+
+    % Legend handles: collected once each, from whichever tile first has them.
+    if k == 1
+        hLeg = [hProf hThr hMle]; legText = {'profile deviance', sprintf('\\chi^2_1(%.2f) threshold', 1 - opts.alpha), 'MLE'};
+    end
+    if ~isempty(hCI)   && ~any(strcmp(legText, 'PL interval endpoint')),   hLeg(end+1) = hCI;   legText{end+1} = 'PL interval endpoint';   end %#ok<AGROW>
+    if ~isempty(hTrue) && ~any(strcmp(legText, 'true value (simulated)')), hLeg(end+1) = hTrue; legText{end+1} = 'true value (simulated)'; end %#ok<AGROW>
+end
+
+ylabel(tl, '-2 \Delta log L', 'Interpreter', 'tex', 'FontSize', fs + 1);
+title(tl, sprintf('%s: profile likelihoods, rows %d:%d, method %d, %.0f%% level  (* = search-bound endpoint)', ...
+    PL.model, PL.tstart1, PL.tstart1 + PL.windowsize1 - 1, PL.method1, level), 'Interpreter', 'none', 'FontSize', fs + 1);
+subtitle(tl, sprintf(['title color: green = finite interval, orange = bound-limited or nuisance-bound activity, ', ...
+    'gray = numerically flat, red = unresolved   (reference optimum: %s)'], PL.referenceStatus), ...
+    'Interpreter', 'none', 'FontSize', max(fs - 1, 7));
+lgd = legend(hLeg, legText, 'Orientation', 'horizontal', 'Interpreter', 'tex', 'FontSize', fs);
+lgd.Layout.Tile = 'south';
+
+outfile = fullfile(outputDir, ['PLprofiles-' strrep(suffix, '.csv', '')]);
+print(fig, outfile, '-dpng', '-r200');
+fprintf('\nSaved: %s.png\n', outfile);
+end
 
 
 % <============================================================================>
