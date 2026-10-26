@@ -99,8 +99,6 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_3);
 
 Both quick-start options files request `B = 300` bootstrap datasets. For a preliminary installation check, reduce `B` in a **copy** of the options file, then increase it and check stability before reporting uncertainty estimates. A smaller bootstrap is a workflow check, not evidence of interval accuracy.
 
-> **Check the settings, not just the filename.** The bundled `options_forecast_SEIR_flu1918_dist1_1.m` currently sets `method1 = 3` and `dist1 = 3`, despite its suffix. To select Poisson maximum likelihood, explicitly set `method1 = 1` in the relevant options file and verify the effective distribution.
-
 ## Example visualizations
 
 These are existing repository illustrations, not reference outputs newly generated from the quick-start commands. Exact results depend on the configuration, random draws, and software version.
