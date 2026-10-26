@@ -1,7 +1,7 @@
 
 function Run_PracticalIdentifiability_ODEModel(options_pass,windowsize1_pass,factor1,replicates1,replicate_id,output_dir_pass)
 
-%Run_PracticalIndentifiability_ODEModel(@options_forecast_SEIR_plain_unreported_dist1_1,4,2)
+%Run_PracticalIdentifiability_ODEModel(@options_forecast_SEIR_plain_unreported_dist1_1,4,2)
 
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>

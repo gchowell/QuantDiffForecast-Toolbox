@@ -100,7 +100,7 @@ global method1; % Parameter estimation method
 % - The first column corresponds to the time index (e.g., 0, 1, 2, ...).
 % - The second column contains the observed time-series data.
 
-cadfilename1 = 'curve-flu1918SF.txt'; % Name of the time-series data file
+cadfilename1 = 'curve-flu1918SF'; % Name of the time-series data file
 caddisease = '1918 Flu';          % Name of the disease related to the time-series data
 datatype = 'cases';               % Nature of the data (e.g., cases, deaths, hospitalizations)
 
@@ -157,7 +157,7 @@ params.LB = [0.01, 0.01, 0.01, 20];              % Lower bounds for parameter es
 params.UB = [10, 2, 2, 1000000];                 % Upper bounds for parameter estimates
 params.initial = [0.6, 1/1.9, 1/4.1, 550000];    % Initial guesses for parameter values
 params.fixed = [0, 1, 1, 1];                     % Boolean vector to fix parameters (1) or estimate (0)
-params.fixI0 = 1;                                % Fix initial value of fitting variable to first observation (1 = yes, 0 = no)
+params.fixI0 = 0;                                % Fix initial value of fitting variable to first observation (1 = yes, 0 = no)
 params.composite = @R0s;                         % Function to estimate composite parameter (e.g., R_0)
 params.composite_name = 'R_0';                   % Name of the composite parameter
 params.extra0 = [];                              % Placeholder for additional parameters

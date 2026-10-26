@@ -115,7 +115,7 @@ datatype='cases'; % string indicating the nature of the data (cases, deaths, hos
 % <=========================== Parameter estimation ============================>
 % <=============================================================================>
 
-method1=3; % Type of estimation method
+method1=1; % Type of estimation method
 
 % Nonlinear least squares (LSQ)=0,
 % MLE Poisson=1,
@@ -123,7 +123,7 @@ method1=3; % Type of estimation method
 % MLE (Neg Binomial)=4, with VAR=mean+alpha*mean^2;
 % MLE (Neg Binomial)=5, with VAR=mean+alpha*mean^d;
 
-dist1=3; % Define dist1 which is the type of error structure. See below:
+dist1=1; % Define dist1 which is the type of error structure. See below:
 
 %dist1=0; % Normal distribution to model error structure (method1=0)
 %dist1=1; % Poisson error structure (method1=0 OR method1=1)
@@ -149,7 +149,7 @@ end
 
 numstartpoints=10; % Number of initial guesses for optimization procedure using MultiStart
 
-B=100; % number of bootstrap realizations to characterize parameter uncertainty
+B=200; % number of bootstrap realizations to characterize parameter uncertainty
 
 % <==============================================================================>
 % <============================== ODE model =====================================>
