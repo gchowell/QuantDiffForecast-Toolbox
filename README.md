@@ -6,12 +6,13 @@
 
 The repository includes an SEIR example using the 1918 influenza time series from San Francisco, together with fitting, forecasting, and visualization functions.
 
-**[Published tutorial](https://doi.org/10.1002/sim.10036)** · **[Video tutorial](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)** · **[Quick start](#quick-start)** · **[Configuration](#configuration)** · **[Outputs](#outputs)** · **[Citation](#citation)**
+**[Published tutorial](https://doi.org/10.1002/sim.10036)** · **[Video tutorial](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)** · **[Quick start](#quick-start)** · **[Profile likelihood](#profile-likelihood)** · **[Configuration](#configuration)** · **[Outputs](#outputs)** · **[Citation](#citation)**
 
 ## What the toolbox provides
 
 - **Model calibration:** constrained parameter estimation using nonlinear least squares, Poisson or negative-binomial likelihoods, and multiple optimization starting points.
 - **Uncertainty quantification:** bootstrap parameter distributions, percentile confidence intervals, and predictive simulations with observation noise.
+- **Parameter identifiability:** profile-likelihood curves and approximate confidence intervals; see [Profile likelihood](#profile-likelihood).
 - **Forecast evaluation:** calibration and held-out forecast summaries, including absolute and squared error, prediction-interval coverage, and weighted interval score (WIS).
 - **Flexible workflows:** user-defined ODEs, selected fixed parameters, multiple observed series, derived quantities such as the basic reproduction number, and rolling calibration windows.
 
@@ -98,6 +99,32 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_3);
 ```
 
 Both quick-start options files request `B = 300` bootstrap datasets. For a preliminary installation check, reduce `B` in a **copy** of the options file, then increase it and check stability before reporting uncertainty estimates. A smaller bootstrap is a workflow check, not evidence of interval accuracy.
+
+### Profile likelihood
+
+Use [`Run_ProfileLikelihood_ODEModel.m`](forecasting_odemodels%20code/Run_ProfileLikelihood_ODEModel.m) to assess practical identifiability by fixing one parameter at a time and reoptimizing the remaining estimated quantities (Raue et al., 2009). The function performs its own fit; no preceding bootstrap run is required.
+
+From `forecasting_odemodels code`, profile the transmission rate β (`paramIndex = 1`) using observations 1–17 of the SEIR example:
+
+```matlab
+rng(1, 'twister');
+opts = struct('paramIndex', 1, 'alpha', 0.05, 'numstartpoints', 3);
+PL = Run_ProfileLikelihood_ODEModel( ...
+    @options_fit_SEIR_flu1918_dist1_3, 1, 17, opts);
+
+PL.referenceStatus
+PL.param(1).CI
+PL.param(1).status
+PL.param(1).FI
+```
+
+Here, `opts.alpha = 0.05` requests an approximate 95% confidence interval using a likelihood-ratio threshold. The negative-binomial dispersion is reestimated at each profile point. Results are saved in `output` as `PLsummary-*.csv`, `PLprofile-param-*.csv`, `PL-*.mat`, and, by default, `PLprofiles-*.png`.
+
+The flatness index (`PL.param(k).FI`) is `maxDclean / threshold`, where `maxDclean` is the largest profile deviance at points without flagged bound activity in the other estimated quantities. Values near zero indicate a nearly flat profile over these points. Interpret FI together with `status`, `explored`, and `stopReason`, because it depends on the explored range and stopping rule.
+
+Inspect `PL.referenceStatus`, `PL.param(1).status`, and the profile plot before interpreting the interval. Flat, bound-limited, or unresolved profiles require checking parameter bounds and numerical diagnostics; a numerically flat profile alone does not prove structural non-identifiability.
+
+Reference: Raue A, Kreutz C, Maiwald T, et al. Structural and practical identifiability analysis of partially observed dynamical models by exploiting the profile likelihood. *Bioinformatics*. 2009;25(15):1923–1929. [doi:10.1093/bioinformatics/btp358](https://doi.org/10.1093/bioinformatics/btp358).
 
 ## Example visualizations
 
@@ -350,3 +377,4 @@ Report the source revision and analysis configuration alongside the citation so 
 ## License
 
 See the repository's [LICENSE](LICENSE) file for the distributed licensing terms.
+
