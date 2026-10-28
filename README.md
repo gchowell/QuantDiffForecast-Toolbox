@@ -12,7 +12,7 @@ The repository includes an SEIR example using the 1918 influenza time series fro
 
 - **Model calibration:** constrained parameter estimation using nonlinear least squares, Poisson or negative-binomial likelihoods, and multiple optimization starting points.
 - **Uncertainty quantification:** bootstrap parameter distributions, percentile confidence intervals, and predictive simulations with observation noise.
-- **Parameter identifiability:** profile-likelihood curves and approximate confidence intervals; see [Profile likelihood](#profile-likelihood).
+- **Parameter identifiability:** profile-likelihood curves and approximate confidence intervals; see [Profile likelihood](#profile-likelihood). For simulation-based studies, see [Practical identifiability simulations](#practical-identifiability-simulations).
 - **Forecast evaluation:** calibration and held-out forecast summaries, including absolute and squared error, prediction-interval coverage, and weighted interval score (WIS).
 - **Flexible workflows:** user-defined ODEs, selected fixed parameters, multiple observed series, derived quantities such as the basic reproduction number, and rolling calibration windows.
 
@@ -127,6 +127,19 @@ The flatness index (`PL.param(k).FI`) is `maxDclean / threshold`, where `maxDcle
 Inspect `PL.referenceStatus`, `PL.param(1).status`, and the profile plot before interpreting the interval. Flat, bound-limited, or unresolved profiles require checking parameter bounds and numerical diagnostics; a numerically flat profile alone does not prove structural non-identifiability.
 
 Reference: Raue A, Kreutz C, Maiwald T, et al. Structural and practical identifiability analysis of partially observed dynamical models by exploiting the profile likelihood. *Bioinformatics*. 2009;25(15):1923–1929. [doi:10.1093/bioinformatics/btp358](https://doi.org/10.1093/bioinformatics/btp358).
+
+### Practical identifiability simulations
+
+Use [`Run_PracticalIdentifiability_ODEModel.m`](forecasting_odemodels%20code/Run_PracticalIdentifiability_ODEModel.m) for simulation-based parameter-recovery studies. It generates synthetic data from `params.initial` under the selected observation model, then fits and bootstraps each replicate. From `forecasting_odemodels code`, run the bundled exponential-growth example:
+
+```matlab
+Run_PracticalIdentifiability_ODEModel( ...
+    @options_forecast_PII_EXPO_r_dist1_3, 30, 5, 20);
+```
+
+Here, `30` is the calibration-window length, `5` is the negative-binomial dispersion α (`dist1 = 3`, variance `mu + 5*mu`), and `20` is the number of simulated datasets. The options file's `B` controls bootstrap datasets per replicate.
+
+Configure [`plotPracticalIdentifiabilityResults.m`](forecasting_odemodels%20code/plotPracticalIdentifiabilityResults.m) to compare calibration windows and plot interval summaries. Results describe parameter recovery under the chosen simulation assumptions.
 
 ## Example visualizations
 
@@ -383,5 +396,4 @@ Report the source revision and analysis configuration alongside the citation so 
 ## License
 
 Distributed under **CC0 1.0 Universal**. See [LICENSE](LICENSE) for the full terms.
-
 
