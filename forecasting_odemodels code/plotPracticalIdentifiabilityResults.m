@@ -6,36 +6,32 @@ clear; close all; clc;
 % ============================================================================
 % ============================================================================
 
-% Options file handle (must be located in the current folder).
-%   @options_forecast_PII_EXPO_r_dist1_1        (EXP, Poisson)
-%   @options_forecast_PII_EXPO_r_dist1_3        (EXP, Negbin)
-%   @options_forecast_PII_GGM_r_p_dist1_1       (GGM, Poisson)
-%   @options_forecast_PII_GGM_r_p_dist1_3       (GGM, Negbin)
-%   @options_forecast_PII_GLM_r_p_K_dist1_1     (GLM, Poisson)
-%   @options_forecast_PII_GLM_r_p_K_dist1_3     (GLM, Negbin)
-%   @options_forecast_PII_SIR_beta_dist1_1      (SIR S1, Poisson)
-%   @options_forecast_PII_SIR_beta_dist1_3      (SIR S1, Negbin)
-%   @options_forecast_PII_SIR_beta_gamma_dist1_3          (SIR S2)
-%   @options_forecast_PII_SEIR_beta_dist1_3               (SEIR S1)
-%   @options_forecast_PII_SEIR_beta_gamma_dist1_3         (SEIR S2)
-%   @options_forecast_PII_SEIR_beta_kappa_gamma_dist1_3   (SEIR S3)
-%   @options_forecast_PII_SEIRD_beta_dist1_3              (SEIRD S1)
-%   @options_forecast_PII_SEIRD_beta_rho_dist1_3          (SEIRD S2)
-%   @options_forecast_PII_SEIRD_beta_rho_gamma_dist1_3    (SEIRD S3)
-%   @options_forecast_PII_SEIRunrep_beta_dist1_3          (SEIR_unrep S1)
-%   @options_forecast_PII_SEIRunrep_beta_rho_dist1_3      (SEIR_unrep S2)
-%   @options_forecast_PII_SEIRunrep_beta_rho_gamma_dist1_3 (SEIR_unrep S3)
-%   @options_forecast_PII_SEIRasymp_beta0_beta1_dist1_3            (SEIR_asymp S1)
-%   @options_forecast_PII_SEIRasymp_beta0_beta1_rho_dist1_3        (SEIR_asymp S2)
-%   @options_forecast_PII_SEIRasymp_beta0_beta1_rho_gamma_dist1_3  (SEIR_asymp S3)
-%   @options_forecast_PII_SEIR_beta_kappa_gamma_dist1_3_2vars  (SEIR_vars 2vars)
-%   @options_forecast_PII_SEIR_beta_kappa_gamma_dist1_3_3vars  (SEIR_vars 3vars)
-%   @options_forecast_PII_SEIR_beta_kappa_gamma_dist1_3_dCdt   (SEIR_vars dCdt)
+% Options file handle (must be on the MATLAB path, normally this folder).
+% The repository ships one ready-to-run study:
+%   @options_forecast_PII_EXPO_r_dist1_3        (EXP, r estimated, Negbin)
+%
+% To study another model, copy that file, rename the file AND the function
+% declared on its first line, and set model.name to
+%   '<DISPLAY>-PII-<scenario>-dist1-<k>'
+% e.g. 'SEIR-PII-beta_gamma-dist1-3'. The text before '-PII' is used for
+% figure titles and the scenario for the output folder name.
 options_handle = @options_forecast_PII_EXPO_r_dist1_3;
 
-% Error structure label (for plot titles / PDF filenames):
-%   'Poisson', 'Negbin5', or 'Negbin10'
+% Error structure label (for plot titles / PDF filenames) and the matching
+% noise factor passed to the simulator (FIX: the factor used to be a
+% hard-coded 5 regardless of this label).
+%   'Poisson'  -> dist1 = 1 in the options file, factor ignored
+%   'Negbin5'  -> overdispersion factor 5
+%   'Negbin10' -> overdispersion factor 10
 error_type = 'Negbin5';
+
+switch error_type
+    case 'Poisson',  noise_factor = 1;
+    case 'Negbin5',  noise_factor = 5;
+    case 'Negbin10', noise_factor = 10;
+    otherwise
+        error('Unknown error_type "%s" (use Poisson, Negbin5 or Negbin10).', error_type);
+end
 
 % Calibration window size — scalar or array
 %   scalar:  windowsize1 = 20;
@@ -47,6 +43,10 @@ num_replicates = 20;
 
 % Whether to run the computation (true) or skip to plotting (false)
 run_flag = true;
+
+% Use the Parallel Computing Toolbox when it is installed and licensed.
+% FIX: the script used to require arallarfor unconditionally.
+use_parallel = true;
 
 % Plot type (after computation or from existing output):
 %   'PII'     — PII median + 95% CI vs calibration period
@@ -63,25 +63,16 @@ plot_type = 'both';
 % ============================================================================
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN CODE
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ============================================================================
 % EXTRACT MODEL CONFIGURATION FROM OPTIONS FILE
 % ============================================================================
+
+if exist(func2str(options_handle), 'file') ~= 2
+    error('Options file "%s.m" was not found on the MATLAB path.', func2str(options_handle));
+end
 
 [~, ~, ~, ~, ~, ~, model_INP, params_INP, ~, ~, ~, ~, ~, ~, ~] = options_handle();
 
@@ -99,7 +90,7 @@ true_values       = params_initial(estimated_indices);
 
 fprintf('Model      : %s\n', model_display);
 fprintf('Full name  : %s\n', model_name);
-fprintf('Error type : %s\n', error_type);
+fprintf('Error type : %s (noise factor %g)\n', error_type, noise_factor);
 fprintf('Window sizes: %s\n', mat2str(windowsize1));
 fprintf('Estimated parameters: ');
 for k = 1:num_estimated
@@ -119,7 +110,7 @@ end
 fprintf('Output folder: %s\n\n', output_Dir);
 
 % ============================================================================
-% RUN COMPUTATION (parallel across replicates)
+% RUN COMPUTATION (parallel across replicates when available)
 % ============================================================================
 
 if run_flag
@@ -154,18 +145,30 @@ if run_flag
     num_to_run = length(run_idx);
 
     if num_to_run > 0
-        fprintf('\nRunning %d tasks (parfor) ...\n', num_to_run);
 
         % Extract the tasks to run
         run_ws  = task_ws(run_idx);
         run_rep = task_rep(run_idx);
 
-        parfor t = 1:num_to_run
-            rng(run_rep(t));
-            fprintf('Running: replicate %d, windowsize %d ...\n', ...
-                run_rep(t), run_ws(t));
-            Run_PracticalIdentifiability_ODEModel(...
-                options_handle, run_ws(t), 5, 1, run_rep(t), output_Dir);
+        have_pct = use_parallel && ...
+            license('test', 'Distrib_Computing_Toolbox') && ...
+            ~isempty(ver('parallel'));
+
+        % Seeding happens inside Run_PracticalIdentifiability_ODEModel
+        % (rng(replicate,'twister')), so serial and parallel runs give
+        % identical files.
+        if have_pct
+            fprintf('\nRunning %d tasks (parfor) ...\n', num_to_run);
+            parfor t = 1:num_to_run
+                fprintf('Running: replicate %d, windowsize %d ...\n', run_rep(t), run_ws(t));
+                Run_PracticalIdentifiability_ODEModel(options_handle, run_ws(t), noise_factor, 1, run_rep(t), output_Dir);
+            end
+        else
+            fprintf('\nRunning %d tasks (serial; Parallel Computing Toolbox not used) ...\n', num_to_run);
+            for t = 1:num_to_run
+                fprintf('Running: replicate %d, windowsize %d ...\n', run_rep(t), run_ws(t));
+                Run_PracticalIdentifiability_ODEModel(options_handle, run_ws(t), noise_factor, 1, run_rep(t), output_Dir);
+            end
         end
     end
 
@@ -173,10 +176,8 @@ if run_flag
 end
 
 % ============================================================================
-% PLOTTING (reads from ./output/)
+% PLOTTING (reads from output_Dir)
 % ============================================================================
-
-%output_dir = fullfile('.', 'output');
 
 close all;
 
