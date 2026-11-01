@@ -162,11 +162,18 @@ params.LB=[0.001 0 0.1 550000]; % lower bound values of the parameter estimates
 params.UB=[10 2 2 550000]; % upper bound values of the parameter estimates
 params.initial=[0.76 1/1.9 1/4.1 550000]; % initial parameter values/guesses
 
-params.fixed=[0 1 1 1]; % Boolean vector to indicate any parameters that should remain fixed (1) to initial values indicated in params.initial. Otherwise the parameter is estimated (0).
+params.fixed=[0 0 0 1]; % Boolean vector to indicate any parameters that should remain fixed (1) to initial values indicated in params.initial. Otherwise the parameter is estimated (0).
 params.fixI0=1; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters (0).
 params.composite=@R0s_SEIR;  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
 params.composite_name='R_0'; % Name of the composite parameter
 params.extra0=[];
+
+params.optimOptions = struct('StepTolerance',1e-8, 'FunctionTolerance',1e-8, 'FiniteDifferenceStepSize',1e-5);
+params.useParallel = true;
+params.polish              = true;   % Nelder-Mead polish of the MultiStart solution
+params.polish_gradient_tol = 1e-2;   % run the polish only if the sqp point is this far from stationary
+params.polish_budget       = 100;    % Nelder-Mead evaluations per free parameter
+
 
 vars.label={'S','E','I','R','C'}; % list of symbols to refer to the variables included in the model
 vars.initial=[params.initial(4)-4 0 4 0 4];  % vector of initial conditions for the model variables

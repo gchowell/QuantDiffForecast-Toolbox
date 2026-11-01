@@ -9,25 +9,56 @@ function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F
 % lets any coordinate (including X0 and alpha) be held fixed while the rest are
 % re-optimized. Omit or pass [] for the original behaviour; nothing else changes.
 %
-% Optional fields of paramsX (both default to the original behaviour):
+% Optional fields of paramsX (all default to the behaviour described here):
 %   paramsX.logscale       true  -> the optimizer works in log10 of every coordinate
 %                                   whose lower bound is positive (rates, N, X0, alpha),
 %                                   which conditions problems whose parameters span
 %                                   several orders of magnitude. Bounds, start points
 %                                   and all outputs stay in the original scale.
-%   paramsX.scaleObjective false -> fmincon's 'ScaleProblem' is 'none' instead of
-%                                   'obj-and-constr'. With 'obj-and-constr' the
-%                                   objective is normalized by its starting value, so
-%                                   for large |log-likelihoods| (long series, large
-%                                   counts) a change of one deviance unit falls below
-%                                   the 1e-6 tolerances and SQP stops at the seed.
-%                                   'none' keeps the tolerances in objective units.
+%   paramsX.scaleObjective false -> the objective handed to fmincon is NOT divided by
+%                                   its value at the seed (see below). Default true.
 %   paramsX.polish         true  -> after MultiStart, run a derivative-free Nelder-Mead
 %                                   polish (fminsearch) on the free coordinates from the
 %                                   SQP solution and keep it if it lowers the objective.
-%                                   Robust when |log L| is large and SQP's finite-
-%                                   difference steps stall; costs a few hundred extra
-%                                   objective evaluations per fit.
+%   paramsX.polish_gradient_tol  -> run the polish only if the projected finite-difference
+%                                   gradient of the scaled objective at the SQP point
+%                                   (inf-norm, unit coordinates) exceeds this value;
+%                                   a point closer to stationary is accepted as is.
+%                                   Default 1e-2. Set 0 to always polish.
+%   paramsX.polish_budget        -> Nelder-Mead evaluations per free parameter.
+%                                   Default 100 (was 500).
+%   paramsX.optimOptions   struct of fmincon option name/value overrides, e.g.
+%                                   struct('StepTolerance',1e-8,'FiniteDifferenceStepSize',1e-4).
+%                                   Applied on top of the defaults set below.
+%   paramsX.useParallel    true  -> MultiStart runs its local solves on a parallel pool
+%                                   (Parallel Computing Toolbox); the toolbox globals are
+%                                   copied to the workers first. Falls back to serial if
+%                                   no pool can be started.
+%
+% OPTIMIZER COORDINATES (revised 2026-10: scaled search space)
+%   fmincon no longer receives the full vector z = [params, X0, alpha, d]. Only the
+%   coordinates that are actually estimated (UB > LB after the fixed / fixI0 / pin
+%   rules) are passed to it, each mapped to the unit interval,
+%
+%        u = (t - LBt) ./ (UBt - LBt)  in  [0,1]^nFree,
+%
+%   where t = z, or log10(z) on positive-bounded coordinates when paramsX.logscale
+%   is true. The objective fmincon minimizes is f(z(u)) / |f(z0)|, i.e. of order 1
+%   at the seed. Reason: fmincon's sqp StepTolerance test is RELATIVE to the size of
+%   the whole decision vector. With a fixed population size N ~ 1e5-1e7 inside that
+%   vector, any step shorter than about N*StepTolerance (0.55 for N = 550,000 and
+%   StepTolerance = 1e-6) satisfied the test, so local runs stopped after one or two
+%   iterations with a positive exit flag at points that were nowhere near a minimum,
+%   MultiStart reported them as converged, and the AICc / bootstrap results inherited
+%   the stall. In unit coordinates the tolerances mean what they say. Start points,
+%   the polish, the returned P and fval, the forecast and the bootstrap all run in
+%   the original units exactly as before; the mapping lives in localToQ/localFromQ.
+%
+%   Two new diagnostics make the "positive exit flag is not a minimum" check
+%   explicit (fitDiagnostics): startAgreement, the fraction of converged local runs
+%   whose objective is within 1e-4 (relative) of the best one, and
+%   scaledGradientInfNorm, the projected finite-difference gradient of the scaled
+%   objective at the returned point in unit coordinates (small = stationary).
 
 global model params vars method1 timevect ydata
 
@@ -108,7 +139,7 @@ if any(~isfinite(data1(:)))
         '(AddErrorStructure) for invalid draws.']);
 end
 
-% Define the objective function handle
+% Define the objective function handle (original units, full vector)
 f = @parameterSearchODE;
 
 % --- bound hardening: orientation, LB/UB consistency, seed projection ---
@@ -130,59 +161,77 @@ z0 = min(max(z,LB),UB);
 mid = (LB + UB)/2;
 nanZ = isnan(z0); if any(nanZ), z0(nanZ) = mid(nanZ); end
 
-% Typical parameter magnitudes for problem scaling: the (projected) seed
-% where it is nonzero, otherwise the bound midpoint, floored at 1e-3.
-typx = max(abs(z0), 1e-3);
-typx(z0 == 0) = max(abs(mid(z0 == 0)), 1e-3);
+% --- option flags ---
+useLog   = isfield(params, 'logscale') && ~isempty(params.logscale) && params.logscale;
+scaleObj = ~(isfield(params, 'scaleObjective') && ~isempty(params.scaleObjective) && ~params.scaleObjective);
+doPolish = isfield(params, 'polish') && ~isempty(params.polish) && params.polish;
+polishGradTol = localOption(params, 'polish_gradient_tol', 1e-2);   % polish only if |grad| exceeds this
+polishBudget  = localOption(params, 'polish_budget', 100);          % Nelder-Mead evaluations per free parameter
 
-% Optimizer configuration: tight stopping tolerances (1e-6) with a large
-% evaluation budget so runs from different start points converge to the
-% same optimum; forward finite differences for gradients on an
-% ODE-based objective; TypicalX/ScaleProblem so parameters of very
-% different magnitudes (rates vs. population sizes) stay well
-% conditioned.
-useLog = isfield(params, 'logscale') && ~isempty(params.logscale) && params.logscale;
-if isfield(params, 'scaleObjective') && ~isempty(params.scaleObjective) && ~params.scaleObjective
-    scaleProblem = 'none';
-else
-    scaleProblem = 'obj-and-constr';
-end
+%% === Optimizer coordinates: free parameters only, on the unit box ===
+% free lists the coordinates the optimizer may move; everything else is held at
+% its (projected) seed value z0, which is the fixed / pinned value by construction.
+free  = find(UB > LB);
+nFree = numel(free);
+span  = UB - LB;
 
-% Optional log10 reparametrization of the optimizer's coordinates (see header).
-% tf marks the transformed coordinates; LBq/UBq/q0 are the optimizer's box and seed.
+% tf marks the coordinates that are log10-transformed before the unit mapping.
 if useLog
     tf = (LB > 0) & (UB > LB);
 else
     tf = false(1, d);
 end
-toQ   = @(zz) localToQ(zz, tf);
-fromQ = @(qq) localFromQ(qq, tf);
-LBq = toQ(LB);  UBq = toQ(UB);  q0 = toQ(z0);
-fq  = @(qq) f(fromQ(qq));
-typq = max(abs(q0), 1e-3);
-typq(q0 == 0) = max(abs((LBq(q0 == 0) + UBq(q0 == 0)) / 2), 1e-3);
-if ~useLog, typq = typx; end
+LBt   = localToT(LB, tf);  UBt = localToT(UB, tf);  spanT = UBt - LBt;
+toQ   = @(Z) localToQ(Z, tf, free, LBt, spanT);          % rows of z  -> rows of u
+fromQ = @(U) localFromQ(U, tf, free, LBt, spanT, z0);    % rows of u  -> rows of z
+LBq   = zeros(1, nFree);
+UBq   = ones(1, nFree);
+q0    = toQ(z0);
 
+% Objective scale: divide by |f(z0)| so fmincon sees an O(1) objective. The
+% value 1e10 is parameterSearchODE's penalty for an invalid trial and is never
+% used as a scale; |f0| < 1 does not need rescaling either.
+f0 = f(z0);
+if scaleObj && isfinite(f0) && f0 ~= 1e10 && abs(f0) >= 1
+    fscale = abs(f0);
+else
+    fscale = 1;
+end
+fq  = @(U) f(fromQ(U));          % objective in ORIGINAL units, unit-box coordinates
+fqs = @(U) fq(U) / fscale;       % what fmincon minimizes
+
+% Optimizer configuration. All coordinates are O(1) and the objective is O(1) at
+% the seed, so the (relative) tolerances below are absolute in practice and can
+% be tight. The finite-difference step is 1e-6 of each parameter's range: with
+% the ODE solved at RelTol 1e-6 this is about where truncation error and solver
+% noise balance (smaller steps are noise-limited, larger ones biased). If the
+% bootstrap becomes slow, relax via paramsX.optimOptions, e.g.
+%   params.optimOptions = struct('StepTolerance',1e-8,'FunctionTolerance',1e-8);
 options = optimoptions('fmincon', ...
     'Algorithm', 'sqp', ...                          % sqp, interior-point
-    'StepTolerance', 1e-6, ...
-    'FunctionTolerance', 1e-6, ...
-    'OptimalityTolerance', 1e-6, ...
+    'StepTolerance', 1e-10, ...
+    'FunctionTolerance', 1e-10, ...
+    'OptimalityTolerance', 1e-8, ...
     'FiniteDifferenceType', 'forward', ...
-    'FiniteDifferenceStepSize',1e-4, ...
-    'ScaleProblem', scaleProblem, ...
-    'TypicalX', typq, ...
+    'FiniteDifferenceStepSize', 1e-6, ...
+    'ScaleProblem', 'none', ...                      % scaling is done explicitly above
+    'TypicalX', ones(1, max(nFree, 1)), ...
     'MaxFunctionEvaluations', 20000, ...
-    'MaxIterations', 20000);
-
-% Define the optimization problem (in the optimizer's coordinates)
-problem = createOptimProblem('fmincon', 'objective', fq, 'x0', q0, ...
-                             'lb', LBq, 'ub', UBq, 'options', options);
+    'MaxIterations', 20000, ...
+    'Display', 'off');
+if isfield(params, 'optimOptions') && isstruct(params.optimOptions) && ~isempty(params.optimOptions)
+    keys = fieldnames(params.optimOptions);
+    for j = 1:numel(keys)
+        options = optimoptions(options, keys{j}, params.optimOptions.(keys{j}));
+    end
+end
+fdStep = options.FiniteDifferenceStepSize;
+if ~isscalar(fdStep), fdStep = fdStep(1); end
 
 %% === Start points: LHS over the box + jitters around the seed ===
+% Generated in the ORIGINAL coordinates (or in log10 coordinates when logscale is
+% on) exactly as before; initialguess therefore keeps its original meaning.
 nStarts = max(0, floor(numstartpoints));
-span = UB - LB;
-
 lhsOK = exist('lhsdesign','file') == 2;
 
 % The full numstartpoints budget explores the box via LHS/maximin -
@@ -194,55 +243,84 @@ lhsOK = exist('lhsdesign','file') == 2;
 nLHS = nStarts;
 nJit = min(3, max(1, nStarts));
 
-% One batch of start points, regenerated fresh on each retry attempt. With
-% logscale on, the LHS points and jitters are drawn in the optimizer's log10
-% coordinates (uniform over decades, additive jitter) and mapped back.
 if useLog
-    makeStarts = @() fromQ(localMakeStarts(nLHS, nJit, d, LBq, UBq, UBq - LBq, q0, lhsOK, tf));
+    makeStarts = @() localFromT(localMakeStarts(nLHS, nJit, d, LBt, UBt, spanT, localToT(z0, tf), lhsOK, tf), tf);
 else
     makeStarts = @() localMakeStarts(nLHS, nJit, d, LB, UB, span, z0, lhsOK, false(1, d));
 end
 
 starts = makeStarts();
 initialguess = starts;
-sp = CustomStartPointSet(toQ(starts));
 
-% Setup MultiStart
-ms = MultiStart('Display','off');
-% Uncomment to run the independent local solves in parallel
-% (requires the Parallel Computing Toolbox):
+% Setup MultiStart. paramsX.useParallel = true runs the local solves of one
+% MultiStart call on a parallel pool (Parallel Computing Toolbox). The objective
+% reads the toolbox globals, which workers do not share with the client, so the
+% globals are copied to every worker first; without that step every local run
+% would fail silently (parameterSearchODE returns its 1e10 penalty).
+useParallel = isfield(params, 'useParallel') && ~isempty(params.useParallel) && params.useParallel;
+if useParallel
+    try
+        pool = gcp;                                   % start (or reuse) the pool
+        global QDF_ODE_TOL %#ok<TLEV>
+        fut = parfevalOnAll(pool, @localSetGlobals, 0, model, params, vars, method1, timevect, ydata, QDF_ODE_TOL);
+        wait(fut);
+        ms = MultiStart('Display','off','UseParallel',true);
+    catch ME
+        warning('fit_model:parallel', 'Parallel pool unavailable (%s); running MultiStart serially.', ME.message);
+        ms = MultiStart('Display','off');
+    end
+else
+    ms = MultiStart('Display','off');
+end
 
-
-% If MultiStart reports failure (flagg < 0), retry with freshly drawn
-% start points, up to maxAttempts passes. The best finite local minimum
-% seen across attempts is tracked as a fallback.
 maxAttempts = 3;
 attempt = 0;
 flagg = -Inf;
 bestP = []; bestFval = Inf;
+startAgreement = NaN;
 
-while flagg <= 0 && attempt < maxAttempts   % 0 = no local minimum found (a run hit its limits): retry too
+if nFree == 0
+    % Nothing to estimate: evaluate the (fixed) vector once.
+    P = z0; fval = f(z0); flagg = 1; bestP = z0; bestFval = fval; startAgreement = 1;
+else
+    % Define the optimization problem in the optimizer's unit coordinates
+    problem = createOptimProblem('fmincon', 'objective', fqs, 'x0', q0, ...
+                                 'lb', LBq, 'ub', UBq, 'options', options);
+    sp = CustomStartPointSet(toQ(starts));
 
-    attempt = attempt + 1;
+    % If MultiStart reports failure (flagg < 0), retry with freshly drawn
+    % start points, up to maxAttempts passes. The best finite local minimum
+    % seen across attempts is tracked as a fallback.
+    while flagg <= 0 && attempt < maxAttempts   % 0 = no local minimum found (a run hit its limits): retry too
 
-    if attempt > 1
-        starts = makeStarts();                 % fresh draws each retry
-        initialguess = [initialguess; starts]; %#ok<AGROW>
-        sp = CustomStartPointSet(toQ(starts));
-    end
+        attempt = attempt + 1;
 
-    [P, fval, flagg, outpt, allmins] = run(ms, problem, sp);
-    P = fromQ(P);
-
-    % Track the best finite local minimum seen across attempts
-    if ~isempty(allmins)
-        [fv, idx] = min([allmins.Fval]);
-        if isfinite(fv) && fv < bestFval
-            bestFval = fv;
-            bestP = fromQ(allmins(idx).X);
+        if attempt > 1
+            starts = makeStarts();                 % fresh draws each retry
+            initialguess = [initialguess; starts]; %#ok<AGROW>
+            sp = CustomStartPointSet(toQ(starts));
         end
-    end
 
+        [Pq, fvalq, flagg, outpt, allmins] = run(ms, problem, sp); %#ok<ASGLU>
+        P = fromQ(Pq);
+        fval = fvalq * fscale;                     % back to original objective units
+
+        % Track the best finite local minimum seen across attempts, and record
+        % how many converged local runs agree with it.
+        if ~isempty(allmins)
+            fvs = [allmins.Fval] * fscale;
+            [fv, idx] = min(fvs);
+            if isfinite(fv) && fv < bestFval
+                bestFval = fv;
+                bestP = fromQ(allmins(idx).X);
+            end
+            okRun = ([allmins.Exitflag] > 0) & isfinite(fvs);
+            if any(okRun)
+                startAgreement = sum(okRun & fvs <= bestFval + 1e-4 * max(1, abs(bestFval))) / sum(okRun);
+            end
+        end
+
+    end
 end
 
 if flagg <= 0
@@ -282,55 +360,71 @@ end
 % returned (it is a better point) but is reported as not converged.
 multistartExitflag = flagg;
 converged = flagg > 0;
-polishExitflag = NaN; polishImproved = false; confirmExitflag = NaN;
-if isfield(params, 'polish') && ~isempty(params.polish) && params.polish
-    freeIdx = find(UBq > LBq);
-    if ~isempty(freeIdx) && all(isfinite(P))
-        qP = toQ(P(:)');
-        nFree = numel(freeIdx);
-        optsNM = optimset('TolX', 1e-8, 'TolFun', 1e-8, 'Display', 'off', ...
-            'MaxFunEvals', 500 * nFree, 'MaxIter', 500 * nFree);
-        for pass = 1:2
-            try
-                fpol = @(qf) localPolishObjective(qf, qP, freeIdx, LBq, UBq, fq);
-                [qfRaw, ~, polishExitflag] = fminsearch(fpol, qP(freeIdx), optsNM);
-                qfRaw = qfRaw(:)';
-                feasible = all(qfRaw >= LBq(freeIdx)) && all(qfRaw <= UBq(freeIdx));
-                qf = min(max(qfRaw, LBq(freeIdx)), UBq(freeIdx));    % project to the box ...
-                qTry = qP; qTry(freeIdx) = qf;
-                fTry = fq(qTry);                                       % ... and evaluate there before accepting
-                improvedNow = isfinite(fTry) && fTry < fval;
-                if improvedNow
-                    qP = qTry; P = fromQ(qP); fval = fTry; polishImproved = true;
-                    converged = (polishExitflag == 1) && feasible;
-                elseif polishExitflag == 1 && feasible
-                    converged = converged || flagg > 0;                % polish confirms the SQP point
-                end
-                % A second pass only when the first one left the point unconverged
-                % (budget exhausted or projected): it restarts from the improved point.
-                if converged || ~improvedNow, break, end
-            catch
-                break   % keep the current solution if the polish fails for any reason
+polishExitflag = NaN; polishImproved = false; confirmExitflag = NaN; polishSkipped = false;
+
+% Stationarity check at the MultiStart point: projected forward-difference
+% gradient of the SCALED objective in unit coordinates (components that push
+% into an active bound are dropped). Costs nFree objective evaluations. It gates
+% the polish (params.polish_gradient_tol) and is reported in fitDiagnostics.
+scaledGradInf = NaN; scaledGrad = [];
+if nFree > 0 && all(isfinite(P))
+    [scaledGrad, scaledGradInf] = localScaledGradient(fqs, toQ(P(:)'), fdStep);
+end
+
+if doPolish && nFree > 0 && all(isfinite(P)) && isfinite(scaledGradInf) && scaledGradInf <= polishGradTol
+    polishSkipped = true;                   % the SQP point is already stationary to within tolerance
+end
+if doPolish && nFree > 0 && all(isfinite(P)) && ~polishSkipped
+    freeIdx = 1:nFree;                      % every unit-box coordinate is free
+    qP = toQ(P(:)');
+    optsNM = optimset('TolX', 1e-8, 'TolFun', 1e-8, 'Display', 'off', ...
+        'MaxFunEvals', ceil(polishBudget * nFree), 'MaxIter', ceil(polishBudget * nFree));
+    for pass = 1:2
+        try
+            fpol = @(qf) localPolishObjective(qf, qP, freeIdx, LBq, UBq, fq);
+            [qfRaw, ~, polishExitflag] = fminsearch(fpol, qP(freeIdx), optsNM);
+            qfRaw = qfRaw(:)';
+            feasible = all(qfRaw >= LBq(freeIdx)) && all(qfRaw <= UBq(freeIdx));
+            qf = min(max(qfRaw, LBq(freeIdx)), UBq(freeIdx));    % project to the box ...
+            qTry = qP; qTry(freeIdx) = qf;
+            fTry = fq(qTry);                                       % ... and evaluate there before accepting
+            improvedNow = isfinite(fTry) && fTry < fval;
+            if improvedNow
+                qP = qTry; P = fromQ(qP); fval = fTry; polishImproved = true;
+                converged = (polishExitflag == 1) && feasible;
+            elseif polishExitflag == 1 && feasible
+                converged = converged || flagg > 0;                % polish confirms the SQP point
             end
-        end
-        % Confirmation step: a polished point that is still unconverged (budget
-        % exhausted, or a raw candidate outside the box, which is what happens when
-        % the optimum lies ON a bound) is handed to a bounded local optimization
-        % from that point; its exit flag then describes the returned vector.
-        if polishImproved && ~converged
-            try
-                optConfirm = optimoptions(options, 'Display', 'off');
-                [qc, fc2, flc] = fmincon(fq, qP, [], [], [], [], LBq, UBq, [], optConfirm);
-                qc = min(max(qc(:)', LBq), UBq);
-                if flc > 0 && isfinite(fc2) && fc2 <= fval + 1e-9 * max(1, abs(fval))
-                    qP = qc; P = fromQ(qP); fval = min(fc2, fval); converged = true;
-                    confirmExitflag = flc;
-                end
-            catch
-                % keep the polished point, reported as not converged
-            end
+            % A second pass only when the first one left the point unconverged
+            % (budget exhausted or projected): it restarts from the improved point.
+            if converged || ~improvedNow, break, end
+        catch
+            break   % keep the current solution if the polish fails for any reason
         end
     end
+    % Confirmation step: a polished point that is still unconverged (budget
+    % exhausted, or a raw candidate outside the box, which is what happens when
+    % the optimum lies ON a bound) is handed to a bounded local optimization
+    % from that point; its exit flag then describes the returned vector.
+    if polishImproved && ~converged
+        try
+            optConfirm = optimoptions(options, 'Display', 'off');
+            [qc, fc2, flc] = fmincon(fqs, qP, [], [], [], [], LBq, UBq, [], optConfirm);
+            qc = min(max(qc(:)', LBq), UBq);
+            fc2 = fc2 * fscale;
+            if flc > 0 && isfinite(fc2) && fc2 <= fval + 1e-9 * max(1, abs(fval))
+                qP = qc; P = fromQ(qP); fval = min(fc2, fval); converged = true;
+                confirmExitflag = flc;
+            end
+        catch
+            % keep the polished point, reported as not converged
+        end
+    end
+end
+
+% If the polish moved the point, report the gradient at the RETURNED vector.
+if polishImproved && nFree > 0 && all(isfinite(P))
+    [scaledGrad, scaledGradInf] = localScaledGradient(fqs, toQ(P(:)'), fdStep);
 end
 
 % Finalize the returned parameters with the SAME evaluation as the objective.
@@ -352,15 +446,28 @@ if nargout > 9
         'scoreAndCurveFromSameEvaluation',true, ...
         'optimizerExitflag',flagg, 'optimizationAttempts',attempt);
 
-    fitDiagnostics.LB = LB;   % full optimizer box [params.LB, X0 bounds, LBe] (post-flipMask)   % NEW
-    fitDiagnostics.UB = UB;   % used downstream for PII_box = log10(UB) - log10(LB)              % NEW
+    fitDiagnostics.LB = LB;   % full optimizer box [params.LB, X0 bounds, LBe] (post-flipMask)
+    fitDiagnostics.UB = UB;   % used downstream for PII_box = log10(UB) - log10(LB)
     fitDiagnostics.multistartExitflag = multistartExitflag;
     fitDiagnostics.polishExitflag = polishExitflag;   % NaN = no polish; 1 converged; 0 budget exhausted
     fitDiagnostics.polishImproved = polishImproved;
+    fitDiagnostics.polishSkipped = polishSkipped;     % true = polish requested but the SQP point was already stationary
+    fitDiagnostics.polishGradientTol = polishGradTol;
+    fitDiagnostics.polishBudget = polishBudget;
     fitDiagnostics.confirmExitflag = confirmExitflag; % fmincon exit flag of the confirmation step (NaN = not run)
     fitDiagnostics.converged = converged;             % convergence status of the RETURNED vector
     fitDiagnostics.logscale = useLog;
-    fitDiagnostics.scaleProblem = scaleProblem;
+    fitDiagnostics.scaleProblem = 'unit-box coordinates of the free parameters; objective / objectiveScale';
+    % --- scaled-search-space diagnostics ---
+    fitDiagnostics.freeIndex = free;                  % indices (into [params, X0, alpha, d]) that were estimated
+    fitDiagnostics.nFree = nFree;
+    fitDiagnostics.objectiveScale = fscale;           % fmincon minimized f / objectiveScale
+    fitDiagnostics.startAgreement = startAgreement;   % fraction of converged local runs within 1e-4 (rel.) of the best
+    fitDiagnostics.scaledGradient = scaledGrad;       % projected FD gradient of the scaled objective, unit coordinates
+    fitDiagnostics.scaledGradientInfNorm = scaledGradInf;
+    fitDiagnostics.optimizerOptions = struct('Algorithm', options.Algorithm, ...
+        'StepTolerance', options.StepTolerance, 'FunctionTolerance', options.FunctionTolerance, ...
+        'OptimalityTolerance', options.OptimalityTolerance, 'FiniteDifferenceStepSize', fdStep);
 end
 
 % Forecast handling
@@ -458,14 +565,88 @@ end
 
 
 % <============================================================================>
-% < log10 reparametrization helpers (paramsX.logscale)                        ==>
+% < Coordinate helpers                                                        ==>
+% <   z : original units, full vector  [params, X0, alpha, d]                ==>
+% <   t : z with log10 applied to the columns marked by tf (paramsX.logscale) ==>
+% <   u : the free columns of t mapped to [0,1] by their bounds              ==>
+% < All helpers accept one point per ROW.                                     ==>
 % <============================================================================>
-function q = localToQ(z, tf)
-% Rows of z are points in the original coordinates; transformed columns -> log10.
-q = z;
+function T = localToT(Z, tf)
+T = Z;
 if any(tf)
-    q(:, tf) = log10(max(z(:, tf), realmin));
+    T(:, tf) = log10(max(Z(:, tf), realmin));
 end
+end
+
+function Z = localFromT(T, tf)
+Z = T;
+if any(tf)
+    Z(:, tf) = 10 .^ T(:, tf);
+end
+end
+
+function U = localToQ(Z, tf, free, LBt, spanT)
+% Rows of Z (original units) -> rows of U (unit box, free coordinates only).
+if isempty(Z), U = zeros(0, numel(free)); return, end
+T = localToT(Z, tf);
+n = size(T, 1);
+U = (T(:, free) - repmat(LBt(free), n, 1)) ./ repmat(spanT(free), n, 1);
+U = min(max(U, 0), 1);
+end
+
+function Z = localFromQ(U, tf, free, LBt, spanT, z0)
+% Rows of U (unit box, free coordinates) -> rows of Z (original units, full
+% vector). Fixed / pinned coordinates are taken from the projected seed z0.
+if isempty(U), Z = []; return, end
+nF = numel(free);
+if size(U, 2) ~= nF && size(U, 1) == nF
+    U = U.';                                   % a single point passed as a column
+end
+n = size(U, 1);
+U = min(max(U, 0), 1);
+T = repmat(localToT(z0, tf), n, 1);
+T(:, free) = repmat(LBt(free), n, 1) + U .* repmat(spanT(free), n, 1);
+Z = localFromT(T, tf);
+end
+
+function val = localOption(params, name, default)
+% Optional scalar setting params.(name); the default applies when absent or empty.
+val = default;
+if isstruct(params) && isfield(params, name) && ~isempty(params.(name)), val = params.(name); end
+if ~isnumeric(val) || ~isscalar(val) || ~isfinite(val) || val < 0
+    error('fit_model:option', '%s must be a finite nonnegative scalar.', name);
+end
+end
+
+function [gp, gInf] = localScaledGradient(fqs, qP, h)
+% Projected forward-difference gradient of the scaled objective at qP (unit box).
+% Components that would push into an active bound are set to zero. Returns
+% NaNs if an evaluation fails; nFree objective evaluations.
+n = numel(qP); gp = NaN(1, n); gInf = NaN;
+try
+    fp = fqs(qP);
+    g = zeros(1, n);
+    for j = 1:n
+        e = zeros(1, n); e(j) = h;
+        if qP(j) + h <= 1
+            g(j) = (fqs(qP + e) - fp) / h;
+        else
+            g(j) = (fp - fqs(qP - e)) / h;
+        end
+    end
+    gp = g;
+    gp(qP <= 1e-8 & g > 0) = 0;          % at lower bound, descent would leave the box
+    gp(qP >= 1 - 1e-8 & g < 0) = 0;      % at upper bound, likewise
+    gInf = norm(gp, inf);
+catch
+    % diagnostics only
+end
+end
+
+function localSetGlobals(m, p, v, m1, tv, yd, odeTol)
+% Runs on each parallel worker: give it the globals the objective reads.
+global model params vars method1 timevect ydata QDF_ODE_TOL
+model = m; params = p; vars = v; method1 = m1; timevect = tv; ydata = yd; QDF_ODE_TOL = odeTol;
 end
 
 function v = localPolishObjective(qf, qFull, freeIdx, LBq, UBq, fq)
@@ -477,11 +658,4 @@ end
 q = qFull;
 q(freeIdx) = qf(:)';
 v = fq(q);
-end
-
-function z = localFromQ(q, tf)
-z = q;
-if any(tf)
-    z(:, tf) = 10 .^ q(:, tf);
-end
 end
