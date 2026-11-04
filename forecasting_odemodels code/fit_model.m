@@ -1,6 +1,7 @@
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
+% 
 %
 function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F2,fitDiagnostics]=fit_model(data1,params0,numstartpoints,DT,modelX,paramsX,varsX,forecastingperiod,pin)
 % Optional 9th input PIN (added for Run_ProfileLikelihood_ODEModel): a vector the
@@ -56,9 +57,17 @@ function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F
 %
 %   Two new diagnostics make the "positive exit flag is not a minimum" check
 %   explicit (fitDiagnostics): startAgreement, the fraction of converged local runs
-%   whose objective is within 1e-4 (relative) of the best one, and
-%   scaledGradientInfNorm, the projected finite-difference gradient of the scaled
-%   objective at the returned point in unit coordinates (small = stationary).
+%   whose objective is within 1e-4 (relative, original units) of the best one, and
+%   scaledGradientInfNorm, the projected finite-difference gradient of
+%   f / max(|f(P)|, 1) at the returned point in unit coordinates (small =
+%   stationary; comparable across fits because it is relative to the objective at
+%   the solution, not at the seed).
+%
+%   Rescale-and-confirm pass: the objective scale is |f(z0)|. If the solution's
+%   objective turns out to be below 1% of that (a seed whose curve blows up can
+%   be 1e6 times the optimum), fmincon's relative tolerances were far looser than
+%   intended, so one more local solve is run from the MultiStart point with the
+%   scale reset to |f(P)|; fitDiagnostics.rescalePass records it.
 
 global model params vars method1 timevect ydata
 
@@ -258,7 +267,8 @@ initialguess = starts;
 % globals are copied to every worker first; without that step every local run
 % would fail silently (parameterSearchODE returns its 1e10 penalty).
 useParallel = isfield(params, 'useParallel') && ~isempty(params.useParallel) && params.useParallel;
-if useParallel
+persistent parallelUnavailable            % remembered for the session: warn once, not once per bootstrap refit
+if useParallel && ~isequal(parallelUnavailable, true)
     try
         pool = gcp;                                   % start (or reuse) the pool
         global QDF_ODE_TOL %#ok<TLEV>
@@ -266,7 +276,9 @@ if useParallel
         wait(fut);
         ms = MultiStart('Display','off','UseParallel',true);
     catch ME
-        warning('fit_model:parallel', 'Parallel pool unavailable (%s); running MultiStart serially.', ME.message);
+        parallelUnavailable = true;
+        warning('fit_model:parallel', ['Parallel pool unavailable (%s); running MultiStart serially ', ...
+            'for the rest of this session (clear fit_model to retry).'], ME.message);
         ms = MultiStart('Display','off');
     end
 else
@@ -362,13 +374,44 @@ multistartExitflag = flagg;
 converged = flagg > 0;
 polishExitflag = NaN; polishImproved = false; confirmExitflag = NaN; polishSkipped = false;
 
-% Stationarity check at the MultiStart point: projected forward-difference
-% gradient of the SCALED objective in unit coordinates (components that push
-% into an active bound are dropped). Costs nFree objective evaluations. It gates
-% the polish (params.polish_gradient_tol) and is reported in fitDiagnostics.
+% Rescale-and-confirm pass. The objective was normalized by |f(z0)|. When the
+% seed is far from the optimum (e.g. f(z0)/f(P) ~ 1e6, which happens when the
+% seed curve blows up), the scaled objective at the optimum is ~1e-6 and all of
+% fmincon's relative tolerances were effectively 1e6 times looser than
+% intended. If that happened, re-run one local solve from P with the scale
+% reset to |f(P)|, so the tolerances mean what they say near the solution.
+rescale = struct('run', false, 'scaleBefore', fscale, 'scaleAfter', fscale, ...
+    'objectiveBefore', fval, 'objectiveAfter', fval, 'exitflag', NaN, 'improved', false);
+if nFree > 0 && all(isfinite(P)) && isfinite(fval) && fscale > 1 && abs(fval) < 1e-2 * fscale
+    fscaleNew = max(abs(fval), 1);
+    fqsNew = @(U) fq(U) / fscaleNew;
+    rescale.run = true; rescale.scaleAfter = fscaleNew;
+    try
+        [qc, fc2, flc] = fmincon(fqsNew, toQ(P(:)'), [], [], [], [], LBq, UBq, [], options);
+        qc = min(max(qc(:)', LBq), UBq);
+        fc2 = fc2 * fscaleNew;
+        rescale.exitflag = flc;
+        if isfinite(fc2) && fc2 < fval
+            P = fromQ(qc); fval = fc2; rescale.improved = true;
+            if flc > 0, converged = true; end
+        end
+        rescale.objectiveAfter = fval;
+    catch
+        % keep the MultiStart point
+    end
+    fscale = fscaleNew; fqs = fqsNew;        % polish/confirm and diagnostics use the corrected scale
+end
+
+% Stationarity check at the current point: projected forward-difference gradient
+% of f / max(|f(P)|, 1) in unit coordinates, i.e. relative to the objective AT
+% THE SOLUTION, so the number is comparable across fits and independent of the
+% seed. Components that push into an active bound are dropped. Costs nFree
+% objective evaluations. It gates the polish (params.polish_gradient_tol) and
+% is reported in fitDiagnostics.
+gradRef = @(fv) max(abs(fv), 1);
 scaledGradInf = NaN; scaledGrad = [];
 if nFree > 0 && all(isfinite(P))
-    [scaledGrad, scaledGradInf] = localScaledGradient(fqs, toQ(P(:)'), fdStep);
+    [scaledGrad, scaledGradInf] = localScaledGradient(@(U) fq(U) / gradRef(fval), toQ(P(:)'), fdStep);
 end
 
 if doPolish && nFree > 0 && all(isfinite(P)) && isfinite(scaledGradInf) && scaledGradInf <= polishGradTol
@@ -424,7 +467,7 @@ end
 
 % If the polish moved the point, report the gradient at the RETURNED vector.
 if polishImproved && nFree > 0 && all(isfinite(P))
-    [scaledGrad, scaledGradInf] = localScaledGradient(fqs, toQ(P(:)'), fdStep);
+    [scaledGrad, scaledGradInf] = localScaledGradient(@(U) fq(U) / gradRef(fval), toQ(P(:)'), fdStep);
 end
 
 % Finalize the returned parameters with the SAME evaluation as the objective.
@@ -461,9 +504,10 @@ if nargout > 9
     % --- scaled-search-space diagnostics ---
     fitDiagnostics.freeIndex = free;                  % indices (into [params, X0, alpha, d]) that were estimated
     fitDiagnostics.nFree = nFree;
-    fitDiagnostics.objectiveScale = fscale;           % fmincon minimized f / objectiveScale
-    fitDiagnostics.startAgreement = startAgreement;   % fraction of converged local runs within 1e-4 (rel.) of the best
-    fitDiagnostics.scaledGradient = scaledGrad;       % projected FD gradient of the scaled objective, unit coordinates
+    fitDiagnostics.objectiveScale = fscale;           % scale in force at the end (after the rescale pass, if any)
+    fitDiagnostics.rescalePass = rescale;             % run/scaleBefore/scaleAfter/objectiveBefore/objectiveAfter/exitflag/improved
+    fitDiagnostics.startAgreement = startAgreement;   % fraction of converged local runs within 1e-4 (rel., original units) of the best
+    fitDiagnostics.scaledGradient = scaledGrad;       % projected FD gradient of f/max(|f(P)|,1) in unit coordinates
     fitDiagnostics.scaledGradientInfNorm = scaledGradInf;
     fitDiagnostics.optimizerOptions = struct('Algorithm', options.Algorithm, ...
         'StepTolerance', options.StepTolerance, 'FunctionTolerance', options.FunctionTolerance, ...
