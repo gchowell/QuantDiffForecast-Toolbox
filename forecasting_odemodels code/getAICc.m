@@ -32,12 +32,21 @@ switch method1
     
     case 0
         
-        AICc= n*log(fval) + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
+        AICc= n*log(fval/n) + n*log(2*pi) + n + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
         
-        part1= n*log(fval);
+        part1= n*log(fval/n);
         
-        part2= 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
+        part2= n*log(2*pi) + n + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
+    
+    case 6
+
+        AICc= 2*n*log(2*fval/n) + 2*n + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
         
+        part1 = 2*n*log(2*fval/n);
+        
+        part2=  2*n + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
+
+
     otherwise
         
         AICc=-2*(-fval) + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
@@ -47,8 +56,6 @@ switch method1
         part2=2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
 
 end
-
-
 
 %method1
 
