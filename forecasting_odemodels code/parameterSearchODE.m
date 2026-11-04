@@ -1,13 +1,19 @@
 function [objfunction, fitcurve, states, IC] = parameterSearchODE(z)
 %PARAMETERSEARCHODE Evaluate a score and, optionally, its exact fitted curve.
-% A scalar call is the optimizer interface: invalid trials receive 1e10.
+% A scalar call is the optimizer interface: an invalid trial (failed or
+% incomplete ODE solve, non-finite states, invalid score) returns Inf, i.e. no
+% valid value. fit_model maps Inf to a bounded value that is larger than the
+% optimizer objective of ANY valid parameter vector (see localBound in
+% fit_model.m). The previous finite penalty, 1e10, could be smaller than
+% legitimate objective values on steep parts of the surface, so a failed solve
+% could look better than a valid point.
 % A call requesting curves/states is strict: invalid final evaluations throw
 % rather than allowing an optimizer penalty to be saved as an accepted fit.
 % One ode15s evaluation supplies both the raw curve and its score.
 
 global model params vars method1 timevect ydata
 
-objfunction = 1e10;
+objfunction = Inf;
 fitcurve = [];
 states = [];
 IC = [];
@@ -34,6 +40,6 @@ catch ME
     if nargout > 1
         rethrow(ME);
     end
-    objfunction = 1e10;
+    objfunction = Inf;
 end
 end

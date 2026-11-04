@@ -5,7 +5,8 @@ function [objfunction, scoringCurve] = quantdiffObjectiveValue(fitcurve, observa
 %   * the existing gamma-term treatment of nonpositive observations;
 %   * the existing parameter-independent likelihood constants being omitted.
 % fitcurve itself is not modified. Invalid accepted scores raise an error;
-% parameterSearchODE maps such errors to 1e10 for scalar optimizer calls only.
+% parameterSearchODE maps such errors to Inf for scalar optimizer calls only
+% (fit_model then bounds it above every valid objective value).
 
 if ~isvector(fitcurve) || ~isvector(observations) || ...
         isempty(fitcurve) || numel(fitcurve) ~= numel(observations) || ...

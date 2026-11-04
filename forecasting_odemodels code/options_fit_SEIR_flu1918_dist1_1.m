@@ -2,9 +2,9 @@
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
 
-function [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, model, params, vars, windowsize1, tstart1, tend1, printscreen1] = options_fit_SEIR_flu1918
+function [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, model, params, vars, windowsize1, tstart1, tend1, printscreen1] = options_fit_SEIR_flu1918_dist1_1
 
-% OPTIONS_FIT_SEIR_FLU1918  Configure QuantDiffForecast fitting for the 1918 SF SEIR model
+% OPTIONS_FIT_SEIR_FLU1918_DIST1_1  Configure QuantDiffForecast fitting for the 1918 SF SEIR model
 %
 % Overview
 %   Returns all configuration needed by Run_Fit_ODEModel to calibrate a
@@ -13,10 +13,10 @@ function [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, model, p
 % Usage
 %   [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, ...
 %    model, params, vars, windowsize1, tstart1, tend1, printscreen1] = ...
-%    options_fit_SEIR_flu1918;
+%    options_fit_SEIR_flu1918_dist1_1;
 %
 % Example run:
-%   Run_Fit_ODEModel(@options_fit_SEIR_flu1918, 1, 1, 17);
+%   Run_Fit_ODEModel(@options_fit_SEIR_flu1918_dist1_1, 1, 1, 17);
 %
 % Outputs (returned by this options function)
 %   cadfilename1    char    Base filename of the input series (looked for in ./input)
@@ -37,6 +37,19 @@ function [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, model, p
 %                           .fixI0     (logical)  1=fix initial observed state to first datum; 0=estimate
 %                           .composite (function) handle for composite metric (e.g., @R0s) or []
 %                           .composite_name (char) name of composite metric (e.g., 'R_0')
+%                             Optimizer settings (read by fit_model; all optional):
+%                              .logscale  (logical)  1=search in log10 of positive-bounded parameters
+%                                                    (recommended when an estimated parameter spans
+%                                                    several orders of magnitude, e.g. K, N, alpha)
+%                              .optimOptions (struct) fmincon overrides, e.g.
+%                                                    struct('StepTolerance',1e-8,'FunctionTolerance',1e-8);
+%                                                    [] keeps the toolbox defaults
+%                              .useParallel (logical) 1=run MultiStart local solves on a parallel pool
+%                                                    (Parallel Computing Toolbox; serial if no pool)
+%                              .polish    (logical)  1=Nelder-Mead polish of the MultiStart solution
+%                              .polish_gradient_tol (scalar) polish only if the scaled gradient at the
+%                                                    sqp solution exceeds this value (default 1e-2)
+%                              .polish_budget (int)  Nelder-Mead evaluations per free parameter (default 100)
 %                           .extra0    (any)      optional constants passed into model
 %   vars            struct  State/fit settings:
 %                           .num      (int)       number of state variables
@@ -74,6 +87,9 @@ function [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, model, p
 %   • Set params.fixI0=1 to anchor the initial observed state to the first datum;
 %     set to 0 to estimate it jointly with other parameters.
 %   • (tstart1, tend1) index rolling windows, not calendar dates.
+%   • Convergence of every fit can be checked in fitDiagnostics (returned by
+%     fit_model): startAgreement close to 1 and a small scaledGradientInfNorm
+%     mean the local runs agree and the solution is stationary.
 %
 % Dependencies
 %   Optimization Toolbox (local solver, e.g., fmincon)
@@ -157,10 +173,23 @@ params.LB = [0.01, 0.01, 0.01, 20];              % Lower bounds for parameter es
 params.UB = [10, 2, 2, 1000000];                 % Upper bounds for parameter estimates
 params.initial = [0.6, 1/1.9, 1/4.1, 550000];    % Initial guesses for parameter values
 params.fixed = [0, 1, 1, 1];                     % Boolean vector to fix parameters (1) or estimate (0)
-params.fixI0 = 0;                                % Fix initial value of fitting variable to first observation (1 = yes, 0 = no)
+params.fixI0 = 1;                                % Fix initial value of fitting variable to first observation (1 = yes, 0 = no)
 params.composite = @R0s;                         % Function to estimate composite parameter (e.g., R_0)
 params.composite_name = 'R_0';                   % Name of the composite parameter
 params.extra0 = [];                              % Placeholder for additional parameters
+
+% <==============================================================================>
+% <========================== Optimizer settings (fit_model) ====================>
+% <==============================================================================>
+% All optional; see the header of fit_model.m. The optimizer searches only the
+% estimated parameters, each rescaled to [0,1] by its bounds.
+
+params.logscale=true; % search in log10 of positive-bounded parameters (recommended when an estimated parameter spans several orders of magnitude, e.g. K, N or alpha in methods 3-5)
+params.optimOptions=[]; % fmincon overrides, e.g. struct('StepTolerance',1e-8,'FunctionTolerance',1e-8,'FiniteDifferenceStepSize',1e-5); [] keeps the toolbox defaults
+params.useParallel=true; % run the MultiStart local solves on a parallel pool (Parallel Computing Toolbox); falls back to serial if no pool is available
+params.polish=true; % Nelder-Mead polish of the MultiStart solution when the gradient test below says it is not stationary
+params.polish_gradient_tol=1e-2; % run the polish only if the scaled gradient at the sqp solution exceeds this value
+params.polish_budget=100; % Nelder-Mead evaluations per free parameter
 
 % Define model variables:
 vars.label = {'S', 'E', 'I', 'R', 'C'};             % Symbols for model variables

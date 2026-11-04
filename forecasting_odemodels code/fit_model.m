@@ -1,7 +1,6 @@
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
-% 
 %
 function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F2,fitDiagnostics]=fit_model(data1,params0,numstartpoints,DT,modelX,paramsX,varsX,forecastingperiod,pin)
 % Optional 9th input PIN (added for Run_ProfileLikelihood_ODEModel): a vector the
@@ -67,7 +66,15 @@ function [P, residual, fitcurve, forecastcurve, timevect2,initialguess,fval,F1,F
 %   objective turns out to be below 1% of that (a seed whose curve blows up can
 %   be 1e6 times the optimum), fmincon's relative tolerances were far looser than
 %   intended, so one more local solve is run from the MultiStart point with the
-%   scale reset to |f(P)|; fitDiagnostics.rescalePass records it.
+%   scale reset to |f(P)|; fitDiagnostics.rescalePass records it. The pass also
+%   runs when the scale is too small by the same factor (a seed whose ODE solve
+%   fails leaves the scale at 1).
+%
+%   Failed ODE solves: parameterSearchODE returns Inf, and the objective handed
+%   to fmincon is bounded by localBound, which keeps the order of all valid
+%   values and puts every failed trial above all of them. (The former finite
+%   penalty, 1e10, was smaller than legitimate objective values on steep parts
+%   of the surface, so a failed solve could look better than a valid point.)
 
 global model params vars method1 timevect ydata
 
@@ -197,17 +204,25 @@ LBq   = zeros(1, nFree);
 UBq   = ones(1, nFree);
 q0    = toQ(z0);
 
-% Objective scale: divide by |f(z0)| so fmincon sees an O(1) objective. The
-% value 1e10 is parameterSearchODE's penalty for an invalid trial and is never
-% used as a scale; |f0| < 1 does not need rescaling either.
+% Objective scale: divide by |f(z0)| so fmincon sees an O(1) objective. A seed
+% whose ODE solve fails (f0 = Inf) is never used as a scale; |f0| < 1 does not
+% need rescaling either.
 f0 = f(z0);
-if scaleObj && isfinite(f0) && f0 ~= 1e10 && abs(f0) >= 1
+if scaleObj && isfinite(f0) && abs(f0) >= 1
     fscale = abs(f0);
 else
     fscale = 1;
 end
 fq  = @(U) f(fromQ(U));          % objective in ORIGINAL units, unit-box coordinates
-fqs = @(U) fq(U) / fscale;       % what fmincon minimizes
+
+% Bounded optimizer objective. parameterSearchODE returns Inf for a trial whose
+% ODE solve fails. fmincon is given g(f/fscale), where g is the identity up to
+% 1e6, grows only logarithmically above it, and sends every failed trial to a
+% constant that is larger than g of ANY finite value (see localBound). Valid
+% points keep their order, so the minimizers are unchanged, and a failed solve
+% can never look better than a valid point. The numbers fmincon sees stay
+% moderate, so finite differences and quasi-Newton updates cannot overflow.
+fqs = @(U) localBound(fq(U) / fscale);   % what fmincon minimizes
 
 % Optimizer configuration. All coordinates are O(1) and the objective is O(1) at
 % the seed, so the (relative) tolerances below are absolute in practice and can
@@ -265,7 +280,7 @@ initialguess = starts;
 % MultiStart call on a parallel pool (Parallel Computing Toolbox). The objective
 % reads the toolbox globals, which workers do not share with the client, so the
 % globals are copied to every worker first; without that step every local run
-% would fail silently (parameterSearchODE returns its 1e10 penalty).
+% would fail silently (parameterSearchODE returns Inf for every trial).
 useParallel = isfield(params, 'useParallel') && ~isempty(params.useParallel) && params.useParallel;
 persistent parallelUnavailable            % remembered for the session: warn once, not once per bootstrap refit
 if useParallel && ~isequal(parallelUnavailable, true)
@@ -300,10 +315,12 @@ else
                                  'lb', LBq, 'ub', UBq, 'options', options);
     sp = CustomStartPointSet(toQ(starts));
 
-    % If MultiStart reports failure (flagg < 0), retry with freshly drawn
-    % start points, up to maxAttempts passes. The best finite local minimum
-    % seen across attempts is tracked as a fallback.
-    while flagg <= 0 && attempt < maxAttempts   % 0 = no local minimum found (a run hit its limits): retry too
+    % If MultiStart reports failure (flagg <= 0), or its best point is a failed
+    % ODE solve (fval = Inf: local runs that start where every solve fails sit on
+    % a flat plateau and report convergence), retry with freshly drawn start
+    % points, up to maxAttempts passes. The best finite local minimum seen
+    % across attempts is tracked as a fallback.
+    while (flagg <= 0 || ~isfinite(fval)) && attempt < maxAttempts   % 0 = no local minimum found (a run hit its limits): retry too
 
         attempt = attempt + 1;
 
@@ -315,12 +332,12 @@ else
 
         [Pq, fvalq, flagg, outpt, allmins] = run(ms, problem, sp); %#ok<ASGLU>
         P = fromQ(Pq);
-        fval = fvalq * fscale;                     % back to original objective units
+        fval = localUnbound(fvalq) * fscale;       % back to original objective units (Inf = failed trial)
 
         % Track the best finite local minimum seen across attempts, and record
         % how many converged local runs agree with it.
         if ~isempty(allmins)
-            fvs = [allmins.Fval] * fscale;
+            fvs = arrayfun(@localUnbound, [allmins.Fval]) * fscale;
             [fv, idx] = min(fvs);
             if isfinite(fv) && fv < bestFval
                 bestFval = fv;
@@ -335,6 +352,10 @@ else
     end
 end
 
+if flagg > 0 && ~isfinite(fval)
+    % MultiStart's "converged" point is a failed ODE solve: it is not a solution.
+    flagg = 0;
+end
 if flagg <= 0
     if ~isempty(bestP)
         warning('fit_model:multistart', ...
@@ -378,18 +399,21 @@ polishExitflag = NaN; polishImproved = false; confirmExitflag = NaN; polishSkipp
 % seed is far from the optimum (e.g. f(z0)/f(P) ~ 1e6, which happens when the
 % seed curve blows up), the scaled objective at the optimum is ~1e-6 and all of
 % fmincon's relative tolerances were effectively 1e6 times looser than
-% intended. If that happened, re-run one local solve from P with the scale
-% reset to |f(P)|, so the tolerances mean what they say near the solution.
+% intended. The opposite also happens: when the seed's ODE solve fails, the
+% scale is 1 and the objective at the optimum can be very large. In either
+% case (scale off by more than a factor of 100) re-run one local solve from P
+% with the scale reset to |f(P)|, so the tolerances mean what they say near the
+% solution.
 rescale = struct('run', false, 'scaleBefore', fscale, 'scaleAfter', fscale, ...
     'objectiveBefore', fval, 'objectiveAfter', fval, 'exitflag', NaN, 'improved', false);
-if nFree > 0 && all(isfinite(P)) && isfinite(fval) && fscale > 1 && abs(fval) < 1e-2 * fscale
-    fscaleNew = max(abs(fval), 1);
-    fqsNew = @(U) fq(U) / fscaleNew;
+fscaleNew = max(abs(fval), 1);
+if nFree > 0 && all(isfinite(P)) && isfinite(fval) && (fscaleNew < 1e-2 * fscale || fscaleNew > 1e2 * fscale)
+    fqsNew = @(U) localBound(fq(U) / fscaleNew);
     rescale.run = true; rescale.scaleAfter = fscaleNew;
     try
         [qc, fc2, flc] = fmincon(fqsNew, toQ(P(:)'), [], [], [], [], LBq, UBq, [], options);
         qc = min(max(qc(:)', LBq), UBq);
-        fc2 = fc2 * fscaleNew;
+        fc2 = localUnbound(fc2) * fscaleNew;
         rescale.exitflag = flc;
         if isfinite(fc2) && fc2 < fval
             P = fromQ(qc); fval = fc2; rescale.improved = true;
@@ -454,7 +478,7 @@ if doPolish && nFree > 0 && all(isfinite(P)) && ~polishSkipped
             optConfirm = optimoptions(options, 'Display', 'off');
             [qc, fc2, flc] = fmincon(fqs, qP, [], [], [], [], LBq, UBq, [], optConfirm);
             qc = min(max(qc(:)', LBq), UBq);
-            fc2 = fc2 * fscale;
+            fc2 = localUnbound(fc2) * fscale;
             if flc > 0 && isfinite(fc2) && fc2 <= fval + 1e-9 * max(1, abs(fval))
                 qP = qc; P = fromQ(qP); fval = min(fc2, fval); converged = true;
                 confirmExitflag = flc;
@@ -687,6 +711,35 @@ catch
 end
 end
 
+function g = localBound(v)
+% Monotone, bounded transform of the scaled objective handed to fmincon.
+%   v <= T      : g = v                     (identity where every optimum lives)
+%   v >  T      : g = T + log1p(v - T)      (continuous, slope 1 at T, <= T + 710)
+%   v not finite: g = T + FAILGAP           (a failed ODE solve)
+% Because log1p(realmax) < 710 < FAILGAP, a failed trial is worse than every
+% finite objective value, and the values fmincon sees never exceed T + FAILGAP.
+T = 1e6; FAILGAP = 1e3;
+if ~isfinite(v) || ~isreal(v)
+    g = T + FAILGAP;
+elseif v > T
+    g = T + log1p(v - T);
+else
+    g = v;
+end
+end
+
+function v = localUnbound(g)
+% Inverse of localBound; the failure value maps back to Inf.
+T = 1e6; FAILGAP = 1e3;
+if ~isfinite(g) || g >= T + FAILGAP
+    v = Inf;
+elseif g > T
+    v = T + expm1(g - T);
+else
+    v = g;
+end
+end
+
 function localSetGlobals(m, p, v, m1, tv, yd, odeTol)
 % Runs on each parallel worker: give it the globals the objective reads.
 global model params vars method1 timevect ydata QDF_ODE_TOL
@@ -694,9 +747,12 @@ model = m; params = p; vars = v; method1 = m1; timevect = tv; ydata = yd; QDF_OD
 end
 
 function v = localPolishObjective(qf, qFull, freeIdx, LBq, UBq, fq)
-% Objective for the Nelder-Mead polish: free coordinates only, box enforced by penalty.
+% Objective for the Nelder-Mead polish: free coordinates only, box enforced by
+% an Inf penalty (worse than every point inside the box, whatever its objective
+% value; fminsearch handles Inf by comparison). A failed ODE solve inside the box
+% also returns Inf from parameterSearchODE.
 if any(qf(:)' < LBq(freeIdx)) || any(qf(:)' > UBq(freeIdx))
-    v = 1e10;
+    v = Inf;
     return
 end
 q = qFull;
