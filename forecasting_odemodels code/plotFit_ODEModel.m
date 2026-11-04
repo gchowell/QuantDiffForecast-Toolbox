@@ -657,7 +657,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         end
 
         if printscreen1
-            ylabel('Objective function')
+            ylabel('Bootstrap fit objective function')
 
             title(cad1)
 
