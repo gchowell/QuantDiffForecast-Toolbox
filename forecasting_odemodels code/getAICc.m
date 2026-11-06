@@ -5,11 +5,9 @@ numparams=params_num;
 numparams=numparams+fixI0;
     
 
-if method1==0 & dist1==0 % Normal distribution -- one parameter for variance
-
-    numparams=numparams+1;
-
-elseif method1==0 & dist1==2 % Neg. binomial error structure where var = factor1*mean
+if method1==0 % Least squares: the Gaussian likelihood behind the AICc formula below
+               % estimates the variance (SSE/n), so it counts as one parameter whatever
+               % dist1 the bootstrap uses (0, 1 or 2). dist1 only sets the bootstrap noise.
 
     numparams=numparams+1;
 
@@ -27,6 +25,13 @@ elseif method1==6  % Laplace distribution -- one parameter for scale
 
 end
 
+% The small-sample correction 2k(k+1)/(n-k-1) is only defined for n - k - 1 > 0,
+% i.e. at most n - 2 estimated quantities. Fail clearly instead of returning an
+% infinite or negative AICc.
+if n-numparams-1 <= 0
+    error('getAICc:tooFewData', ...
+        'AICc needs at least k + 2 data points: n = %d, k = %d estimated quantities (k must be at most n - 2).', n, numparams);
+end
 
 switch method1
     

@@ -5,11 +5,9 @@ numparams=params_num;
 numparams=numparams+fixI0;
 
 
-if method1==0 & dist1==0 % Normal distribution -- one parameter for variance
-
-    numparams=numparams+1;
-
-elseif method1==0 & dist1==2 % Neg. binomial error structure where var = factor1*mean
+if method1==0 % Least squares: the Gaussian likelihood behind the AICc formula below
+               % estimates the variance (SSE/n), so it counts as one parameter whatever
+               % dist1 the bootstrap uses (0, 1 or 2). dist1 only sets the bootstrap noise.
 
     numparams=numparams+1;
 
