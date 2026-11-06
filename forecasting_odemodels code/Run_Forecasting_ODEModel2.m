@@ -212,9 +212,14 @@ numparams=get_nparams(method1,dist1,sum(params.fixed==0),length(vars.fit_index).
 numparams
 windowsize1*length(vars.fit_index)
 
-if numparams>=windowsize1*length(vars.fit_index)
+% AICc's small-sample correction divides by n - numparams - 1, so the window
+% needs at least numparams + 2 data points (numparams <= n - 2).
+if numparams>=windowsize1*length(vars.fit_index)-1
 
-    error("Number of estimated parameters should be smaller than the number of data points. Consider increasing the length of the calibration period.")
+    error(['The calibration window has %d data points but %d quantities are estimated ' ...
+        '(model parameters, free initial values and error-model parameters). AICc needs at least %d data points: ' ...
+        'increase the length of the calibration period or fix more parameters.'], ...
+        windowsize1*length(vars.fit_index), numparams, numparams+2)
 
 end
 
@@ -228,7 +233,7 @@ end
 % ============================ Rolling window analysis=====================================>
 % <==================================================================================>
 
-param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % median, 95% CI: LB, UB
+param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % point estimate (best fit to the data), 95% CI: LB, UB
 
 if method1==3 | method1==4
     MCEs=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index)+1); % if method1==3 | method1==4
@@ -813,12 +818,12 @@ for i=tstart1:1:tend1  %rolling window analysis
     % <================================ Parameter estimates =========================================>
     % <========================================================================================>
 
-    % estimate median and 95% CI from distribution of parameter estimates
+    % point estimate = best fit to the observed data (P_model1d); 95% CI from the bootstrap distribution
 
 
     for j=1:params.num
 
-        param_estims(j,1:3,cc1) = [median(Phatss_model1(:,j)) quantile(Phatss_model1(:,j),0.025) quantile(Phatss_model1(:,j),0.975)];
+        param_estims(j,1:3,cc1) = [P_model1d(j) quantile(Phatss_model1(:,j),0.025) quantile(Phatss_model1(:,j),0.975)];
 
         MCEs(cc1,j)=std(Phatss_model1(:,j))/sqrt(M);
                 
@@ -828,7 +833,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     for j=1:length(vars.fit_index)
 
-        param_estims(params.num+j,1:3,cc1) = [median(Phatss_model1(:,params.num+j)) quantile(Phatss_model1(:,params.num+j),0.025) quantile(Phatss_model1(:,params.num+j),0.975)];
+        param_estims(params.num+j,1:3,cc1) = [P_model1d(params.num+j) quantile(Phatss_model1(:,params.num+j),0.025) quantile(Phatss_model1(:,params.num+j),0.975)];
 
         MCEs(cc1,params.num+j)=std(Phatss_model1(:,params.num+j))/sqrt(M); %X0
 
@@ -837,8 +842,22 @@ for i=tstart1:1:tend1  %rolling window analysis
     end
 
 
-    param_estims(params.num+j+1,1:3,cc1) = [median(Phatss_model1(:,params.num+j+1)) quantile(Phatss_model1(:,params.num+j+1),0.025) quantile(Phatss_model1(:,params.num+j+1),0.975)];
-    param_estims(params.num+j+2,1:3,cc1) = [median(Phatss_model1(:,params.num+j+2)) quantile(Phatss_model1(:,params.num+j+2),0.025) quantile(Phatss_model1(:,params.num+j+2),0.975)];
+    param_estims(params.num+j+1,1:3,cc1) = [P_model1d(params.num+j+1) quantile(Phatss_model1(:,params.num+j+1),0.025) quantile(Phatss_model1(:,params.num+j+1),0.975)];
+    param_estims(params.num+j+2,1:3,cc1) = [P_model1d(params.num+j+2) quantile(Phatss_model1(:,params.num+j+2),0.025) quantile(Phatss_model1(:,params.num+j+2),0.975)];
+    % Point estimate = fit to the observed data (P_model1d); the 95% interval is the
+    % 2.5-97.5% percentile range of the bootstrap refits. The bootstrap medians are kept
+    % for reference, and an estimate outside its own interval is flagged: it signals
+    % bootstrap bias (e.g. an estimate on a bound or along a ridge), not a coding error.
+    param_bootmedian(:,cc1) = median(Phatss_model1,1)';
+    outsideCI = (P_model1d(:)' < quantile(Phatss_model1,0.025,1)) | (P_model1d(:)' > quantile(Phatss_model1,0.975,1));
+    estimOutsideCI(cc1,1:numel(outsideCI)) = outsideCI;
+    if any(outsideCI)
+        zlab = [params.label(:)', arrayfun(@(k) sprintf('X0(%d)',k), vars.fit_index, 'UniformOutput', false), {'alpha','d'}];
+        warning('QuantDiffForecast:estimateOutsideCI', ...
+            ['Window %d: the fitted value of %s lies outside its bootstrap 95%% interval. ' ...
+            'This indicates bootstrap bias (often an estimate on a bound or along a ridge); inspect the fit before reporting.'], ...
+            i, strjoin(zlab(outsideCI), ', '));
+    end
 
     if method1==3 | method1==4
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
@@ -864,7 +883,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if isempty(params.composite)==0
         compositetemp=params.composite(Phatss_model1);
-        composite12=[composite12;[median(compositetemp) quantile(compositetemp,0.025) quantile(compositetemp,0.975)]]
+        composite12=[composite12;[params.composite(P_model1d(:)') quantile(compositetemp,0.025) quantile(compositetemp,0.975)]]
     else
         composite12=[composite12;[NaN NaN NaN]]
     end
@@ -889,6 +908,15 @@ for i=tstart1:1:tend1  %rolling window analysis
             nexttile(j)
             hist(Phatss_model1(:,j))
             hold on
+            % Best fit to the observed data (P_model1d) as a dashed red line
+            % (x-limits padded so the line stays visible when the estimate sits on
+            % the edge of the histogram, e.g. on a parameter bound)
+            ylimHist = ylim;
+            plot([P_model1d(j) P_model1d(j)], ylimHist, 'r--', 'LineWidth', 2);
+            ylim(ylimHist);
+            xlimHist = xlim;
+            padHist = 0.03*diff(xlimHist);
+            xlim([min(xlimHist(1), P_model1d(j)-padHist) max(xlimHist(2), P_model1d(j)+padHist)]);
 
             %save parameter histogram
            [counts, edges]=hist(Phatss_model1(:,j));
@@ -1089,7 +1117,7 @@ end
 fileName = sprintf('results_%s%s.mat', window_file_token, replicate_file_token);
 fullFilePath = fullfile(outputDir, fileName);
 
-save(fullFilePath, 'paramss', 'performanceC', 'SCI', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', 'LBbox', 'UBbox', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', '-mat');
+save(fullFilePath, 'paramss', 'param_bootmedian', 'estimOutsideCI', 'performanceC', 'SCI', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', 'LBbox', 'UBbox', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', '-mat');
 
 % Print bootstrap counts only; do not change fitting or retained results.
 requestedBootstrap = M * numel(numericalAudit.originalFits);

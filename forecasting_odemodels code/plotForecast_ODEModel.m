@@ -195,7 +195,7 @@ end
 % ============================ Rolling window analysis=====================================>
 % <==================================================================================>
 
-param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % median, 95% CI: LB, UB
+param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % point estimate (best fit to the data), 95% CI: LB, UB
 
 if method1==3 | method1==4
     MCEs=zeros(length(tstart1:1:tend1),params.num+length(vars.fit_index)+1); % if method1==3 | method1==4
@@ -239,6 +239,8 @@ end
 AICcs=[];
 paramss=[];
 composite12=[];
+param_bootmedian=[];
+estimOutsideCI=[];
 
 cc1=1;
 
@@ -250,7 +252,12 @@ for i=tstart1:1:tend1  %rolling window analysis
     outputDir = fullfile(basePath, 'output');
     fileName = strcat('Forecast-ODEModel-',cadfilename1,'-model_name-',model.name,'-fit_index-',num2str(vars.fit_index(x)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat');
     fullFilePath = fullfile(outputDir, fileName);
+    % Keep this script's own estimate accumulators: the saved runner workspace loaded
+    % here contains the same variables (as they were when it was saved) and would
+    % overwrite earlier windows, e.g. with bootstrap medians from runs before Nov 2026.
+    keepEstimates = {param_estims, paramss, composite12, param_bootmedian, estimOutsideCI};
     load(fullFilePath, '-mat');
+    [param_estims, paramss, composite12, param_bootmedian, estimOutsideCI] = keepEstimates{:};
 
 
     t_window=i:1:i+windowsize1-1;
@@ -303,7 +310,12 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         fileName = strcat('Forecast-ODEModel-',cadfilename1,'-model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat');
         fullFilePath = fullfile(outputDir, fileName);
+        % Keep this script's own estimate accumulators: the saved runner workspace loaded
+        % here contains the same variables (as they were when it was saved) and would
+        % overwrite earlier windows, e.g. with bootstrap medians from runs before Nov 2026.
+        keepEstimates = {param_estims, paramss, composite12, param_bootmedian, estimOutsideCI};
         load(fullFilePath, '-mat');
+        [param_estims, paramss, composite12, param_bootmedian, estimOutsideCI] = keepEstimates{:};
 
         printscreen1=printscreen1_INP2;
 
@@ -556,11 +568,11 @@ for i=tstart1:1:tend1  %rolling window analysis
     % <================================ Parameter estimates =========================================>
     % <========================================================================================>
 
-    % estimate median and 95% CI from distribution of parameter estimates
+    % point estimate = best fit to the observed data (P_model1d); 95% CI from the bootstrap distribution
 
     for j=1:params.num
 
-        param_estims(j,1:3,cc1) = [median(Phatss_model1(:,j)) quantile(Phatss_model1(:,j),0.025) quantile(Phatss_model1(:,j),0.975)];
+        param_estims(j,1:3,cc1) = [P_model1d(j) quantile(Phatss_model1(:,j),0.025) quantile(Phatss_model1(:,j),0.975)];
 
         MCEs(cc1,j)=std(Phatss_model1(:,j))/sqrt(M);
 
@@ -570,7 +582,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     for j=1:length(vars.fit_index)
 
-        param_estims(params.num+j,1:3,cc1) = [median(Phatss_model1(:,params.num+j)) quantile(Phatss_model1(:,params.num+j),0.025) quantile(Phatss_model1(:,params.num+j),0.975)];
+        param_estims(params.num+j,1:3,cc1) = [P_model1d(params.num+j) quantile(Phatss_model1(:,params.num+j),0.025) quantile(Phatss_model1(:,params.num+j),0.975)];
 
         MCEs(cc1,params.num+j)=std(Phatss_model1(:,params.num+j))/sqrt(M); %X0
 
@@ -579,8 +591,13 @@ for i=tstart1:1:tend1  %rolling window analysis
     end
 
 
-    param_estims(params.num+j+1,1:3,cc1) = [median(Phatss_model1(:,params.num+j+1)) quantile(Phatss_model1(:,params.num+j+1),0.025) quantile(Phatss_model1(:,params.num+j+1),0.975)];
-    param_estims(params.num+j+2,1:3,cc1) = [median(Phatss_model1(:,params.num+j+2)) quantile(Phatss_model1(:,params.num+j+2),0.025) quantile(Phatss_model1(:,params.num+j+2),0.975)];
+    param_estims(params.num+j+1,1:3,cc1) = [P_model1d(params.num+j+1) quantile(Phatss_model1(:,params.num+j+1),0.025) quantile(Phatss_model1(:,params.num+j+1),0.975)];
+    param_estims(params.num+j+2,1:3,cc1) = [P_model1d(params.num+j+2) quantile(Phatss_model1(:,params.num+j+2),0.025) quantile(Phatss_model1(:,params.num+j+2),0.975)];
+    % Keep the bootstrap medians and the outside-CI flags (as in the runners), so that
+    % rewriting parameters-ODEModel-*.mat below does not drop them.
+    param_bootmedian(:,cc1) = median(Phatss_model1,1)';
+    outsideCI = (P_model1d(:)' < quantile(Phatss_model1,0.025,1)) | (P_model1d(:)' > quantile(Phatss_model1,0.975,1));
+    estimOutsideCI(cc1,1:numel(outsideCI)) = outsideCI;
 
     if method1==3 | method1==4
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
@@ -599,7 +616,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     if isempty(params.composite)==0
         compositetemp=params.composite(Phatss_model1);
-        composite12=[composite12;[median(compositetemp) quantile(compositetemp,0.025) quantile(compositetemp,0.975)]]
+        composite12=[composite12;[params.composite(P_model1d(:)') quantile(compositetemp,0.025) quantile(compositetemp,0.975)]]
     else
         composite12=[composite12;[NaN NaN NaN]]
     end
@@ -623,6 +640,15 @@ for i=tstart1:1:tend1  %rolling window analysis
             nexttile(j)
             hist(Phatss_model1(:,j))
             hold on
+            % Best fit to the observed data (P_model1d) as a dashed red line
+            % (x-limits padded so the line stays visible when the estimate sits on
+            % the edge of the histogram, e.g. on a parameter bound)
+            ylimHist = ylim;
+            plot([P_model1d(j) P_model1d(j)], ylimHist, 'r--', 'LineWidth', 2);
+            ylim(ylimHist);
+            xlimHist = xlim;
+            padHist = 0.03*diff(xlimHist);
+            xlim([min(xlimHist(1), P_model1d(j)-padHist) max(xlimHist(2), P_model1d(j)+padHist)]);
 
             %save parameter histogram
             [counts, edges]=hist(Phatss_model1(:,j));
@@ -731,7 +757,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         end
 
         if printscreen1
-            ylabel('Objective function')
+            ylabel('Bootstrap fit objective function')
 
             title(cad1)
 
@@ -825,7 +851,7 @@ end
 
 fileName = strcat('parameters-ODEModel-',cadfilename1,'-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat');
 fullFilePath = fullfile(outputDir, fileName);
-save(fullFilePath, 'param_estims', '-mat');
+save(fullFilePath, 'param_estims', 'param_bootmedian', 'estimOutsideCI', '-mat');
 
 % <=============================================================================================>
 % <================= Save csv file with parameters from rolling window analysis ====================================>
@@ -907,7 +933,7 @@ composite12=[(tstart1:1:tend1)' composite12 log10(composite12(:,3)./composite12(
 
 T = array2table(composite12);
 T.Properties.VariableNames(1)={'time'};
-T.Properties.VariableNames(2:5) = {'composite mean','composite 95% CI LB','composite 95% CI UB','composite SCI'};
+T.Properties.VariableNames(2:5) = {'composite best fit','composite 95% CI LB','composite 95% CI UB','composite SCI'};
 %writetable(T,strcat('./output/parameters-composite-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
 fileName = strcat('parameters-composite-','model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
