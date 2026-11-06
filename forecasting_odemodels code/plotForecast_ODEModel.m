@@ -191,6 +191,23 @@ if numparams>=windowsize1*length(vars.fit_index)
 end
 
 
+% Clip tend1 to the last window that fits in the data (plus the held-out
+% forecast targets when performance is evaluated). Must run BEFORE the
+% rolling-window arrays below are allocated with length(tstart1:1:tend1) rows.
+rowsNeededAfterStart = windowsize1 - 1 + forecastingperiod*(getperformance>0);
+if (tend1 + rowsNeededAfterStart) > length(data(:,1))
+    tend1_new = length(data(:,1)) - rowsNeededAfterStart;
+    if tend1_new < tstart1
+        error(['No rolling window fits: tstart1 = %d, windowsize1 = %d, forecastingperiod = %d ' ...
+               'need rows through %d but the data has %d rows.'], ...
+               tstart1, windowsize1, forecastingperiod, tstart1+rowsNeededAfterStart, length(data(:,1)));
+    end
+    warning('plotForecast_ODEModel:tend1', ...
+        'tend1 = %d exceeds the data (%d rows); using tend1 = %d.', ...
+        tend1, length(data(:,1)), tend1_new);
+    tend1 = tend1_new;
+end
+
 % <==================================================================================>
 % ============================ Rolling window analysis=====================================>
 % <==================================================================================>
@@ -228,13 +245,6 @@ WISFSS=[];
 
 quantilescss=[];
 quantilesfss=[];
-
-if (tend1+windowsize1-1) > length(data(:,1))
-
-    tend1= length(data(:,1))-windowsize1+1;
-    'adjusting tend1'
-
-end
 
 AICcs=[];
 paramss=[];
@@ -331,7 +341,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         T.Properties.VariableNames(1:6) = {'time','calibration_period','MAE','MSE','Coverage 95%PI','WIS'};
         %writetable(T,strcat('./output/performance-calibration-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
-        fileName = strcat('performance-calibration-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
+        fileName = strcat('performance-calibration-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
         fullFilePath = fullfile(outputDir, fileName);
         writetable(T, fullFilePath);
 
@@ -511,7 +521,7 @@ for i=tstart1:1:tend1  %rolling window analysis
             T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
             %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
-            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
+            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
             fullFilePath = fullfile(outputDir, fileName);
             writetable(T, fullFilePath);
 
@@ -528,7 +538,7 @@ for i=tstart1:1:tend1  %rolling window analysis
             T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
             %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
-            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
+            fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
             fullFilePath = fullfile(outputDir, fileName);
             writetable(T, fullFilePath);
 
@@ -554,7 +564,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         % Exporting the quantile forecast file
         %writetable(combinedQuantilesTable,strcat('./output/quantile-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
-        fileName = strcat('quantile-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
+        fileName = strcat('quantile-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
         fullFilePath = fullfile(outputDir, fileName);
         writetable(combinedQuantilesTable, fullFilePath);
 

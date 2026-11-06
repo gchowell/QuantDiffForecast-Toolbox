@@ -229,6 +229,23 @@ if tend1<tstart1
 
 end
 
+% Clip tend1 to the last window that fits in the data (plus the held-out
+% forecast targets when performance is evaluated). Must run BEFORE the
+% rolling-window arrays below are allocated with length(tstart1:1:tend1) rows.
+rowsNeededAfterStart = windowsize1 - 1 + forecastingperiod*(getperformance>0);
+if (tend1 + rowsNeededAfterStart) > length(data(:,1))
+    tend1_new = length(data(:,1)) - rowsNeededAfterStart;
+    if tend1_new < tstart1
+        error(['No rolling window fits: tstart1 = %d, windowsize1 = %d, forecastingperiod = %d ' ...
+               'need rows through %d but the data has %d rows.'], ...
+               tstart1, windowsize1, forecastingperiod, tstart1+rowsNeededAfterStart, length(data(:,1)));
+    end
+    warning('Run_Forecasting_ODEModel2:tend1', ...
+        'tend1 = %d exceeds the data (%d rows); using tend1 = %d.', ...
+        tend1, length(data(:,1)), tend1_new);
+    tend1 = tend1_new;
+end
+
 % <==================================================================================>
 % ============================ Rolling window analysis=====================================>
 % <==================================================================================>
@@ -278,13 +295,6 @@ WISFSS=[];
 
 quantilescs=[];
 quantilesfs=[];
-
-if (tend1+windowsize1-1) > length(data(:,1))
-
-    tend1= length(data(:,1))-windowsize1+1;
-    'adjusting tend1'
-
-end
 
 % Numerical-policy provenance; retained for every rolling window and draw.
 numericalAudit = struct('profile',[], 'originalFits',{{}}, 'bootstrapFits',{{}});
