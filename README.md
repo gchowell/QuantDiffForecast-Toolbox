@@ -11,7 +11,7 @@ The repository includes an SEIR example using the 1918 influenza time series fro
 ## What the toolbox provides
 
 - **Model calibration:** constrained parameter estimation using nonlinear least squares, Poisson or negative-binomial likelihoods, and multiple optimization starting points.
-- **Uncertainty quantification:** bootstrap parameter distributions, percentile confidence intervals, and predictive simulations with observation noise.
+- **Uncertainty quantification:** point estimates from the fit to the observed data, bootstrap parameter distributions, percentile confidence intervals, and predictive simulations with observation noise.
 - **Parameter identifiability:** profile-likelihood curves and approximate confidence intervals; see [Profile likelihood](#profile-likelihood). For simulation-based studies, see [Practical identifiability simulations](#practical-identifiability-simulations).
 - **Forecast evaluation:** calibration and held-out forecast summaries, including absolute and squared error, prediction-interval coverage, and weighted interval score (WIS).
 - **Flexible workflows:** user-defined ODEs, selected fixed parameters, multiple observed series, derived quantities such as the basic reproduction number, and rolling calibration windows.
@@ -339,8 +339,8 @@ Results are written under `forecasting_odemodels code/output`. Filenames encode 
 
 | File or prefix | Contents and interpretation |
 | --- | --- |
-| `parameters-rollingwindow-*.csv` | Bootstrap parameter medians and 2.5th/97.5th percentiles. Some column labels say “mean,” although the calculation uses a median. |
-| `parameters-composite-*.csv` | Corresponding summaries for a derived quantity, when configured. Its central summary is also a median despite the “mean” label. |
+| `parameters-rollingwindow-*.csv` | Point estimates (the fit to the observed data) and 2.5th/97.5th percentiles of the bootstrap refits. Before November 2026 the point estimate was the bootstrap median; the medians are still saved as `param_bootmedian` in `parameters-ODEModel-*.mat`. |
+| `parameters-composite-*.csv` | Corresponding summaries for a derived quantity, when configured: `composite best fit` is the quantity evaluated at the best-fit parameters (this column was labelled `composite mean` before November 2026); the bounds are 2.5th/97.5th percentiles across bootstrap refits. |
 | `MCSEs-rollingwindow-*.csv` | `std(bootstrap draws)/sqrt(B)` summaries; these are not parameter confidence intervals or Monte Carlo errors of the median. |
 | `SCIs-rollingwindow-*.csv` | Legacy log interval-ratio diagnostics. |
 | `AICc-*.csv` | Columns `time`, `AICc`, `AICc part1`, `AICc part2`, and `numparams`; no separate AIC or BIC columns are produced here. |
@@ -351,9 +351,9 @@ Results are written under `forecasting_odemodels code/output`. Filenames encode 
 | `StateVars-*.csv` | State-trajectory medians and 2.5th/97.5th percentiles across bootstrap fits. |
 | `*-histogram-rollingwindow-*.csv` | Parameter histogram bins and counts, when generated. |
 | `bootstraps-ODEModel-*.mat` | Bootstrap parameter draws, objective values, and `numericalAudit`. |
-| `parameters-ODEModel-*.mat` | Parameter summary array. Plotting rewrites this file without `numericalAudit`; retrieve the audit from `bootstraps-ODEModel-*.mat`. |
+| `parameters-ODEModel-*.mat` | Parameter summary array `param_estims` (best fit, 95% CI), plus `param_bootmedian` (bootstrap medians) and `estimOutsideCI` (1 where the best fit lies outside its own 95% CI). Plotting rewrites this file without `numericalAudit`; retrieve the audit from `bootstraps-ODEModel-*.mat`. |
 | `Forecast-ODEModel-*.mat` | Saved per-window/per-series workspace, including forecast arrays, grids, and run variables used by the plotting functions. |
-| `results_W<W>_rep<r>.mat` | One file per (window size, replicate) of the practical identifiability study: `paramss` (median and 95% CI of every parameter), `SCI` (log10 CI width, the PII), `PII_box`, `PII_ratio`, `fracLB`, `fracUB`, forecast arrays and performance summaries. Written by `Run_Forecasting_ODEModel2`. |
+| `results_W<W>_rep<r>.mat` | One file per (window size, replicate) of the practical identifiability study: `paramss` (best-fit estimate and 95% CI of every parameter), `param_bootmedian`, `estimOutsideCI`, `SCI` (log10 CI width, the PII), `PII_box`, `PII_ratio`, `fracLB`, `fracUB`, forecast arrays and performance summaries. Written by `Run_Forecasting_ODEModel2`. |
 | `<Model>_<error>_W…/PII_param.pdf`, `plot_box_param.pdf`, `CI_grid_param_<k>.pdf` | Figures of the practical identifiability study. |
 
 In the main runners, `forecast_model1` contains trajectories propagated from bootstrap parameter fits; `forecast_model12` additionally includes sampled observation noise. Parameter confidence intervals and observation prediction intervals therefore answer different questions. These are **frequentist bootstrap draws, not posterior samples**. The MAT files should not be assumed to include the random-number-generator state automatically.
@@ -361,6 +361,8 @@ In the main runners, `forecast_model1` contains trajectories propagated from boo
 The default performance CSVs report **MSE**, not RMSE or MAPE. Other metrics calculated internally are not necessarily exported in those tables.
 
 Inspect unresolved bootstrap counts and `numericalAudit` in `bootstraps-ODEModel-*.mat` before interpreting intervals; unresolved fits can remain in the summaries.
+
+Parameter histograms mark the best fit with a dashed red line. A best fit outside its own bootstrap 95% interval triggers the warning `QuantDiffForecast:estimateOutsideCI` and is recorded in `estimOutsideCI`; this usually means bootstrap bias, for example an estimate on a parameter bound or along a ridge, and the fit should be inspected before reporting.
 
 ## Adding a model
 
