@@ -30,8 +30,9 @@ The fitting and bootstrap workflow uses the following MATLAB products:
 | [Optimization Toolbox](https://www.mathworks.com/help/optim/ug/fmincon.html) | Constrained optimization with `fmincon`. |
 | [Global Optimization Toolbox](https://www.mathworks.com/help/gads/multistart.html) | `MultiStart` and optimization start-point management. |
 | [Statistics and Machine Learning Toolbox](https://www.mathworks.com/help/stats/index.html) | Random sampling for the observation models, including `poissrnd`, `nbinrnd`, and `normrnd`. |
+| [Parallel Computing Toolbox](https://www.mathworks.com/help/parallel-computing/index.html) (optional) | Parallel `MultiStart` local solves in the fitting functions when `params.useParallel = true`, and parallel replicates in `plotPracticalIdentifiabilityResults`. |
 
-Parallel Computing Toolbox is optional. `plotPracticalIdentifiabilityResults` runs its simulation replicates in a `parfor` loop when the toolbox is installed and licensed and falls back to a serial loop otherwise; the fitting functions do not use it. No minimum MATLAB release for the source workflow is specified here.
+Parallel Computing Toolbox is optional and is used in two places. First, the fitting functions (`Run_Fit_ODEModel`, `Run_Forecasting_ODEModel`, `Run_ProfileLikelihood_ODEModel`, and the plotting functions that refit) can run the `MultiStart` local solves of every fit, including each bootstrap refit, on a parallel pool. This is controlled by `params.useParallel` in the options file: when it is `true`, `fit_model` starts or reuses the current pool (`gcp`) and runs `MultiStart` with `'UseParallel', true`; when it is `false` or absent, everything runs serially. If the toolbox is not installed or no pool can be started, `fit_model` issues the warning `fit_model:parallel` once, falls back to serial execution for the rest of the session, and produces the same results more slowly. The shipped quick-start fitting file sets `params.useParallel = true`, so expect a pool to start on the first run. Second, `plotPracticalIdentifiabilityResults` runs its simulation replicates in a `parfor` loop when the toolbox is installed and licensed and falls back to a serial loop otherwise. No minimum MATLAB release for the source workflow is specified here.
 
 Clone the repository in a terminal:
 
@@ -101,6 +102,8 @@ plotODEModel(@options_fit_SEIR_flu1918_dist1_3);
 ```
 
 Both quick-start options files request `B = 300` bootstrap datasets. For a preliminary installation check, reduce `B` in a **copy** of the options file, then increase it and check stability before reporting uncertainty estimates. A smaller bootstrap is a workflow check, not evidence of interval accuracy.
+
+The fitting options file sets `params.useParallel = true`, so the first call starts a parallel pool (this can take a few seconds and prints the usual pool start-up message). Without the Parallel Computing Toolbox the run continues serially after a single `fit_model:parallel` warning. To keep a run serial, set `params.useParallel = false` in your copy of the options file; the same optimization problem is solved from the same start points, only the wall-clock time changes. The random draws (start points and bootstrap noise) are generated on the client in both modes, so `rng` seeding controls them either way.
 
 ### Profile likelihood
 
@@ -295,6 +298,19 @@ For a new analysis, copy one of the quick-start options files. Rename both the `
 
 The main runners infer `params.num` and `vars.num` from their label vectors. Keep parameter and state vectors internally consistent. Explicit window and horizon arguments in the function call override their defaults in the options file.
 
+### Optimizer settings (optional)
+
+These `params` fields are read by `fit_model` and may be omitted; the defaults below then apply. The shipped `dist1_1` and `dist1_3` example files set all of them explicitly. See the header of `fit_model.m` for details.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `params.useParallel` | `false` | `true` runs the `MultiStart` local solves of every fit, including the bootstrap refits, on a parallel pool (Parallel Computing Toolbox). The pool is started with `gcp` if none is open. If no pool can be started, `fit_model` warns once (`fit_model:parallel`) and continues serially for the rest of the session. The same problem is solved from the same start points in both modes; only the wall-clock time changes. |
+| `params.logscale` | `false` | `true` makes the optimizer work in `log10` of every estimated coordinate whose lower bound is positive. Recommended when estimated parameters span several orders of magnitude (for example `N`, `K`, or `alpha` in methods 3–5). Bounds, starting values, and all outputs stay in the original units. |
+| `params.optimOptions` | `[]` | Structure of `fmincon` option overrides applied on top of the toolbox defaults, for example `struct('StepTolerance', 1e-8, 'FunctionTolerance', 1e-8)`. |
+| `params.polish` | `false` | `true` adds a derivative-free Nelder–Mead polish of the `MultiStart` solution and keeps it if it lowers the objective. |
+| `params.polish_gradient_tol` | `1e-2` | The polish runs only when the scaled finite-difference gradient at the `MultiStart` solution exceeds this value; set `0` to always polish. |
+| `params.polish_budget` | `100` | Nelder–Mead function evaluations per free parameter. |
+
 ### Estimation methods and observation models
 
 Let `mu` denote the model-predicted observation, `alpha` the fitted negative-binomial dispersion parameter, and `d` its variance exponent.
@@ -412,6 +428,8 @@ Composite functions receive a matrix of parameter draws, with one draw per row. 
 | --- | --- |
 | MATLAB cannot find a runner or options function | Check Current Folder, `addpath`, and `which Run_Forecasting_ODEModel -all`. Remove conflicting toolbox copies from the path. |
 | `fmincon`, `MultiStart`, or a random-sampling function is unavailable | Verify the required MATLAB products are installed and licensed. |
+| Warning `fit_model:parallel` ("Parallel pool unavailable ... running MultiStart serially") | The options file sets `params.useParallel = true` but no pool could be started, usually because the Parallel Computing Toolbox is not installed or licensed. The run continues serially and the results are unchanged. Set `params.useParallel = false` to silence the warning, or run `parpool` manually to see the underlying error. |
+| A parallel pool starts unexpectedly on the first fit | `params.useParallel = true` in the options file (the shipped quick-start fitting file sets it). Set it to `false` for serial runs. |
 | A plotting function cannot find its MAT file | Run the matching fitting/forecasting function first and use the same options, method, window indices, and horizon. |
 | A custom ODE produces “Too many input arguments” | Its callback must accept all four inputs, even when the last input is unused. |
 | Data dimensions or values are rejected | Check the numeric input format, finite values, unit-spaced time grid, and one observation mapping per data column. |
