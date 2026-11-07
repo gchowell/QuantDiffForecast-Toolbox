@@ -611,9 +611,12 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         median1=median(forecast2,2);
 
-        figure(100+i*20+j)
-
         if printscreen1
+
+            % figure() is created only when plotting is requested; it used to sit
+            % outside this block and opened an empty window per fitted variable
+            % whenever printscreen1 = 0.
+            figure(100+i*20+j)
 
             tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
             nexttile(1)
@@ -678,7 +681,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         % <========================================================================================>
         % <========================================================================================>
 
-        if getperformance
+        if getperformance && printscreen1    % printscreen1 governs every figure, including this one
 
             if forecastingperiod>0
                 figure(200+i*20+j)
@@ -1033,7 +1036,7 @@ end % rolling window analysis
 
 if vars.num>1
 
-    figure(400)
+    if printscreen1, figure(400), end      % figure only when plotting is requested; the CSV below is always written
 
     factor1=factor(vars.num);
 
@@ -1051,7 +1054,7 @@ if vars.num>1
 
     cc1=1;
 
-    tiledlayout(rows1,cols1,'Padding', 'compact', 'TileSpacing', 'compact')
+    if printscreen1, tiledlayout(rows1,cols1,'Padding', 'compact', 'TileSpacing', 'compact'), end
 
     dataTable=[];
     varslabels1=cell(1,(vars.num)*3+1);
@@ -1063,31 +1066,35 @@ if vars.num>1
 
     for i2=1:1:vars.num
 
-        nexttile(cc1)
-        %for j=1:M
-        plot(quantile(cell2mat(Ys(i2,:,:))',0.5),'k-')
-        hold on
-        plot(quantile(cell2mat(Ys(i2,:,:))',0.025),'k--')
-        plot(quantile(cell2mat(Ys(i2,:,:))',0.975),'k--')
-        %end
+        if printscreen1
+            nexttile(cc1)
+            plot(quantile(cell2mat(Ys(i2,:,:))',0.5),'k-')
+            hold on
+            plot(quantile(cell2mat(Ys(i2,:,:))',0.025),'k--')
+            plot(quantile(cell2mat(Ys(i2,:,:))',0.975),'k--')
+        end
 
-        dataTable=[dataTable [quantile(cell2mat(Ys(i2,:,:))',0.5)' quantile(cell2mat(Ys(i2,:,:))',0.025)' quantile(cell2mat(Ys(i2,:,:))',0.975)']]
+        dataTable=[dataTable [quantile(cell2mat(Ys(i2,:,:))',0.5)' quantile(cell2mat(Ys(i2,:,:))',0.025)' quantile(cell2mat(Ys(i2,:,:))',0.975)']];
 
         varslabels1((i2-1)*3+2)=append({'median '},vars.label(i2));
         varslabels1((i2-1)*3+3)=append({'95% LB '},vars.label(i2));
         varslabels1((i2-1)*3+4)=append({'95% UB '},vars.label(i2));
 
-        title(vars.label(i2))
-        set(gca,'FontSize',GetAdjustedFontSize);
-        set(gcf,'color','white')
+        if printscreen1
+            title(vars.label(i2))
+            set(gca,'FontSize',GetAdjustedFontSize);
+            set(gcf,'color','white')
+        end
 
         cc1=cc1+1;
 
     end
 
-    for j=1:1:cols1
-        nexttile(rows1*cols1-cols1+j)
-        xlabel('Time')
+    if printscreen1
+        for j=1:1:cols1
+            nexttile(rows1*cols1-cols1+j)
+            xlabel('Time')
+        end
     end
 
     T = array2table(dataTable);
