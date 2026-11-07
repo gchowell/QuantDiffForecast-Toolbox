@@ -1,19 +1,23 @@
-function [Ys,curves]=Run_simulate_ODEModel(options_pass,windowsize1_pass,factor1)
+function [Ys,curves,noiseTruth]=Run_simulate_ODEModel(options_pass,windowsize1_pass,factor1)
 %RUN_SIMULATE_ODEMODEL  Simulate one synthetic noisy time series from params.initial.
 %
-%   [Ys,curves] = Run_simulate_ODEModel(options, windowsize1, factor1)
+%   [Ys,curves,noiseTruth] = Run_simulate_ODEModel(options, windowsize1, factor1)
 %
 %   Solves the ODE at params.initial over windowsize1+max(30,forecastingperiod)
 %   time steps (window plus room for the forecast horizon) and adds observation noise of type
 %   dist1 (from the options file) to every fitted variable.
 %
 %   factor1 is optional: it is the noise parameter handed to AddErrorStructure
-%   (SD for dist1=0, overdispersion for dist1=2..5, Laplace scale for dist1=6;
-%   ignored for Poisson). When omitted or [], a default is chosen from dist1.
+%   (SD for dist1=0, overdispersion for dist1=2..4, Laplace scale for dist1=6;
+%   ignored for Poisson). For dist1=5 (var = mu + alpha*mu^d) pass the pair
+%   [alpha d]; a scalar is accepted and means d = 1, which is the dist1=3 model
+%   (a warning says so). When omitted or [], a default is chosen from dist1.
 %
 %   Outputs
-%     Ys     vars.num-by-1 cell, each the noise-free trajectory of one state
-%     curves [time, noisy series(s)] matrix, ready to be saved with '-ascii'
+%     Ys         vars.num-by-1 cell, each the noise-free trajectory of one state
+%     curves     [time, noisy series(s)] matrix, ready to be saved with '-ascii'
+%     noiseTruth struct with fields dist1, factor1 (alpha for NB) and d: the
+%                noise model actually used, for simulation-recovery studies
 %
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>
@@ -57,33 +61,35 @@ datatype=datatype_INP;
 % <=========================== Parameter estimation ============================>
 % <=============================================================================>
 
-d=1;
-
 dist1=dist1_INP; %Define dist1 which is the type of error structure:
 
 if ~isempty(method1) && method1>0
     dist1=method1;          % same rule as the fitting runners
 end
 
-% FIX: factor1 used to be a required input whose defaulting switch had been
-% commented out, so a two-argument call failed with "Not enough input arguments".
+% Noise specification. factor1 is a scalar for every dist1 except 5, where it
+% may be the pair [alpha d] (var = mu + alpha*mu^d). A scalar for dist1=5 is
+% accepted for backward compatibility and means d = 1 (the dist1=3 model).
+% FIX (earlier): factor1 used to be a required input whose defaulting switch had
+% been commented out, so a two-argument call failed with "Not enough input arguments".
 if ~exist('factor1','var') || isempty(factor1)
     switch dist1
-        case 0,         factor1 = 4;     % normal: SD of the increments
-        case 1,         factor1 = 1;     % Poisson: not used
-        case {2,3,5},   factor1 = 3;     % NB: var = 3*mu (dist1=2) or mu + 3*mu (3, 5 with d=1)
-        case 4,         factor1 = 0.1;   % NB: var = mu + 0.1*mu^2 (alpha=3 here would give SD > 1.7*mean)
-        case 6,         factor1 = 20;    % Laplace scale
+        case 0,         factor1 = 4;         % normal: SD of the increments
+        case 1,         factor1 = 1;         % Poisson: not used
+        case {2,3},     factor1 = 3;         % NB: var = 3*mu (dist1=2) or mu + 3*mu (dist1=3)
+        case 4,         factor1 = 0.1;       % NB: var = mu + 0.1*mu^2 (alpha=3 here would give SD > 1.7*mean)
+        case 5,         factor1 = [0.5 1.5]; % NB: var = mu + 0.5*mu^1.5, strictly between dist1=3 and dist1=4
+        case 6,         factor1 = 20;        % Laplace scale
         otherwise
             error('Run_simulate_ODEModel:unsupportedDist', ...
                 'Unsupported error structure dist1=%d.', dist1);
     end
 end
 
-if ~isscalar(factor1) || ~isfinite(factor1) || factor1 < 0
-    error('Run_simulate_ODEModel:badFactor', ...
-        'factor1 must be a finite nonnegative scalar (got %s).', mat2str(factor1));
-end
+% Split the specification into the scalar handed to AddErrorStructure and d.
+[factor1, d] = parseNoiseSpec(dist1, factor1);
+
+noiseTruth = struct('dist1', dist1, 'factor1', factor1, 'd', d);
 
 numstartpoints=numstartpoints_INP; % kept for the settings summary
 
@@ -211,7 +217,7 @@ for j=1:length(vars.fit_index)
 
     if any(~isfinite(curve_noise))
         error('Run_simulate_ODEModel:invalidNoise', ...
-            'AddErrorStructure returned non-finite values (dist1=%d, factor1=%g).', dist1, factor1);
+            'AddErrorStructure returned non-finite values (dist1=%d, factor1=%g, d=%g).', dist1, factor1, d);
     end
 
     curves=[curves curve_noise];
@@ -253,6 +259,9 @@ if printscreen1
     disp(['  - Estimation Method (method1): ', num2str(method1)]);
     disp(['  - Error Structure (dist1): ', num2str(dist1)]);
     disp(['  - Noise factor (factor1): ', num2str(factor1)]);
+    if dist1 == 5
+        disp(['  - Variance exponent (d): ', num2str(d)]);
+    end
     disp(['  - Number of Initial Guesses (MultiStart): ', num2str(numstartpoints)]);
     disp(['  - Model Function: ', func2str(model.fc)]);
     disp(['  - Model Name: ', model.name]);
@@ -270,4 +279,48 @@ if printscreen1
 
 end
 
+end % main function
+
+
+% <============================================================================>
+% < Noise specification parser                                                ==>
+% <============================================================================>
+function [factor1, d] = parseNoiseSpec(dist1, spec)
+%PARSENOISESPEC Split the user's noise setting into (factor1, d).
+%   spec is a scalar for dist1 = 0,1,2,3,4,6 and either a scalar alpha or the
+%   pair [alpha d] for dist1 = 5. Returns the scalar factor1 that
+%   AddErrorStructure expects and the exponent d (1 unless dist1 = 5 and a
+%   pair was given). Errors are thrown for shapes and values that would make
+%   the simulation meaningless; the bounds on d mirror LBe/UBe for method 5
+%   in fit_model (d is estimated inside [0.6, 5]).
+
+d = 1;
+if dist1 == 5
+    if numel(spec) == 2
+        factor1 = spec(1);
+        d = spec(2);
+    elseif numel(spec) == 1
+        factor1 = spec;
+        warning('Run_simulate_ODEModel:dEqualsOne', ...
+            ['dist1=5 with a scalar factor1 simulates with d = 1, which is identical to dist1=3. ', ...
+             'Pass [alpha d] to test recovery of d.']);
+    else
+        error('Run_simulate_ODEModel:factor1Shape', ...
+            'For dist1=5 factor1 must be a scalar alpha or the pair [alpha d] (got %s).', mat2str(spec));
+    end
+    if ~isnumeric(d) || ~isreal(d) || ~isfinite(d) || d < 0.6 || d > 5
+        error('Run_simulate_ODEModel:dOutOfBox', ...
+            'd = %s lies outside the estimation box [0.6, 5] used by fit_model for method 5.', mat2str(d));
+    end
+else
+    if numel(spec) ~= 1
+        error('Run_simulate_ODEModel:factor1Shape', ...
+            'factor1 must be a scalar for dist1 = %d (got %s).', dist1, mat2str(spec));
+    end
+    factor1 = spec;
+end
+if ~isnumeric(factor1) || ~isreal(factor1) || ~isfinite(factor1) || factor1 < 0
+    error('Run_simulate_ODEModel:badFactor', ...
+        'factor1 must be a finite nonnegative scalar (got %s).', mat2str(factor1));
+end
 end

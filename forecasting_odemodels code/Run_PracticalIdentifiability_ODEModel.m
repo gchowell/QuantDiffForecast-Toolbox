@@ -4,9 +4,15 @@ function Run_PracticalIdentifiability_ODEModel(options_pass,windowsize1_pass,fac
 %   Run_PracticalIdentifiability_ODEModel(options, windowsize1, factor1, replicates1)
 %   Run_PracticalIdentifiability_ODEModel(options, windowsize1, factor1, [], replicate_id, output_dir)
 %
+%   factor1 is the noise parameter of Run_simulate_ODEModel (scalar; [] for
+%   the default). For dist1=5 (var = mu + alpha*mu^d) pass the pair [alpha d],
+%   e.g. [0.5 1.5]; a scalar means d = 1, which is the dist1=3 model.
+%
 %   For each replicate, (i) simulate a synthetic epidemic from params.initial
 %   with the observation-noise model selected by dist1 (Run_simulate_ODEModel),
-%   (ii) write it to input/<cadfilename1>-windowsize-<W>-replicate-<r>.txt, and
+%   (ii) write it to input/<cadfilename1>-windowsize-<W>-replicate-<r>.txt
+%   together with the noise model actually used, noiseTruth, in
+%   input/<cadfilename1>-windowsize-<W>-replicate-<r>-noise.mat, and
 %   (iii) fit/forecast it with Run_Forecasting_ODEModel2, which stores one
 %   results_W<W>_rep<r>.mat per replicate in output_dir.
 %
@@ -15,11 +21,20 @@ function Run_PracticalIdentifiability_ODEModel(options_pass,windowsize1_pass,fac
 %     single mode   : replicate_id = r                    -> replicate r only
 %                     (used by plotPracticalIdentifiabilityResults inside parfor)
 %
-%   Example:
+%   Examples:
 %     Run_PracticalIdentifiability_ODEModel(@options_forecast_PII_EXPO_r_dist1_3, 30, 5, 20)
+%     Run_PracticalIdentifiability_ODEModel(@options_forecast_PII_SEIR_dist1_5, 30, [0.5 1.5], 20)
 %
-%   Reproducibility: the random stream is seeded with the replicate number
-%   (rng(r,'twister')) before each simulation.
+%   Reproducibility and the window-size design: the random stream is seeded
+%   with the replicate number (rng(r,'twister')) before each simulation, and
+%   noise draws are consumed in time order from the same mean curve. Replicate
+%   r's W = 30 series is therefore the first 30 points of its W = 40 series:
+%   window sizes form a PAIRED (nested) design. This is deliberate. Comparisons
+%   of PII, bias or coverage across W for the same replicate share their
+%   simulation noise, so differences between window sizes have smaller Monte
+%   Carlo variance than with independent series. If independent series per W
+%   are wanted instead, change the seed to rng(1000*windowsize1 + r,'twister');
+%   the seed actually used is written to the -noise.mat sidecar either way.
 %
 % <============================================================================>
 % < Author: Gerardo Chowell  ==================================================>
@@ -80,7 +95,8 @@ datatype=datatype_INP;
 % <=========================== Parameter estimation ============================>
 % <=============================================================================>
 
-d=1;
+% (d is no longer set here: the variance exponent used for simulation comes
+%  back from Run_simulate_ODEModel in noiseTruth.d)
 
 dist1=dist1_INP; %Define dist1 which is the type of error structure:
 
@@ -146,9 +162,10 @@ end
 
 for j=replicate_list
 
-    rng(j, 'twister');                                   % reproducible per replicate
+    seed = j;                                            % nested across W (see header); use 1000*windowsize1 + j for independent series
+    rng(seed, 'twister');                                % reproducible per replicate
 
-    [Ys,curves]=Run_simulate_ODEModel(options,windowsize1,factor1);
+    [Ys,curves,noiseTruth]=Run_simulate_ODEModel(options,windowsize1,factor1);
 
     simulation=[];
 
@@ -181,6 +198,12 @@ for j=replicate_list
     fullFilePath = fullfile(inputDir, cadfilename1_input);
 
     save(fullFilePath,'curves','-ascii')
+
+    % The ASCII file cannot carry metadata, so the noise model actually used
+    % (dist1, alpha/factor1, d) is written beside it for the recovery plots.
+    noiseFilePath = strrep(fullFilePath, '.txt', '-noise.mat');
+    replicate = j; %#ok<NASGU>
+    save(noiseFilePath, 'noiseTruth', 'windowsize1', 'replicate', 'seed', '-mat');
 
     % Model fit and forecast; Run_Forecasting_ODEModel2 saves results_W<W>_rep<j>.mat
     Run_Forecasting_ODEModel2(options,1,1,windowsize1,forecastingperiod,j,output_dir_pass);

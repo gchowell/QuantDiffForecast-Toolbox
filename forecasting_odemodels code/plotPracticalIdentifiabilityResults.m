@@ -17,21 +17,18 @@ clear; close all; clc;
 % figure titles and the scenario for the output folder name.
 options_handle = @options_forecast_PII_EXPO_r_dist1_3;
 
-% Error structure label (for plot titles / PDF filenames) and the matching
-% noise factor passed to the simulator (FIX: the factor used to be a
-% hard-coded 5 regardless of this label).
-%   'Poisson'  -> dist1 = 1 in the options file, factor ignored
-%   'Negbin5'  -> overdispersion factor 5
-%   'Negbin10' -> overdispersion factor 10
-error_type = 'Negbin5';
-
-switch error_type
-    case 'Poisson',  noise_factor = 1;
-    case 'Negbin5',  noise_factor = 5;
-    case 'Negbin10', noise_factor = 10;
-    otherwise
-        error('Unknown error_type "%s" (use Poisson, Negbin5 or Negbin10).', error_type);
-end
+% Noise parameter passed to the simulator (Run_simulate_ODEModel). The noise
+% FAMILY is NOT chosen here: it comes from dist1 / method1 in the options file,
+% and the label used in titles, folder and file names is derived from it below
+% (FIX: a free-text label used to be typed here, so 'Poisson' with a dist1=3
+% options file silently produced negative-binomial data labelled Poisson).
+%   dist1 = 1        : ignored (Poisson)
+%   dist1 = 0        : SD of the increments
+%   dist1 = 2, 3, 4  : overdispersion alpha (var = factor*mu, mu+alpha*mu, mu+alpha*mu^2)
+%   dist1 = 5        : the PAIR [alpha d] (var = mu + alpha*mu^d); a scalar means d = 1
+%   dist1 = 6        : Laplace scale
+%   []               : the simulator's default for that dist1
+noise_factor = 5;              % e.g. 5 for NB3; [0.5 1.5] for NB5 with d = 1.5
 
 % Calibration window size — scalar or array
 %   scalar:  windowsize1 = 20;
@@ -74,7 +71,14 @@ if exist(func2str(options_handle), 'file') ~= 2
     error('Options file "%s.m" was not found on the MATLAB path.', func2str(options_handle));
 end
 
-[~, ~, ~, ~, ~, ~, model_INP, params_INP, ~, ~, ~, ~, ~, ~, ~] = options_handle();
+global method1   % set as a side effect inside the options function
+[cadfilename1_INP, ~, ~, dist1_INP, ~, ~, model_INP, params_INP, vars_INP, ~, ~, ~, ~, ~, ~] = options_handle();
+
+% Same rule as the runners: method1 > 0 selects the error structure.
+dist1 = dist1_INP;
+if ~isempty(method1) && method1 > 0
+    dist1 = method1;
+end
 
 model_name     = model_INP.name;   % full name for file loading
 parts = strsplit(model_name, '-PII');
@@ -85,12 +89,32 @@ params_fixed   = params_INP.fixed;
 params_initial = params_INP.initial;
 
 estimated_indices = find(params_fixed == 0);
-num_estimated     = length(estimated_indices);
 true_values       = params_initial(estimated_indices);
+
+% paramss (saved by Run_Forecasting_ODEModel2) holds 3 columns per slot in the
+% order [model params, X0 per fitted variable, alpha, d]. Append the error-model
+% slots that the method actually estimates, with their simulated truths, so
+% alpha and d are plotted against the values used to generate the data.
+[error_type, noise_truth_vals, noise_slot_labels] = noise_label(dist1, noise_factor);
+nX0        = length(vars_INP.fit_index);
+slot_alpha = length(params_label) + nX0 + 1;
+slot_d     = slot_alpha + 1;
+switch dist1
+    case {3, 4}
+        estimated_indices(end+1) = slot_alpha;
+        true_values(end+1)       = noise_truth_vals(1);
+        params_label{slot_alpha} = noise_slot_labels{1};
+    case 5
+        estimated_indices(end+1:end+2) = [slot_alpha slot_d];
+        true_values(end+1:end+2)       = noise_truth_vals(1:2);
+        params_label{slot_alpha} = noise_slot_labels{1};
+        params_label{slot_d}     = noise_slot_labels{2};
+end
+num_estimated = length(estimated_indices);
 
 fprintf('Model      : %s\n', model_display);
 fprintf('Full name  : %s\n', model_name);
-fprintf('Error type : %s (noise factor %g)\n', error_type, noise_factor);
+fprintf('Error type : %s\n', error_type);
 fprintf('Window sizes: %s\n', mat2str(windowsize1));
 fprintf('Estimated parameters: ');
 for k = 1:num_estimated
@@ -176,6 +200,25 @@ if run_flag
 end
 
 % ============================================================================
+% RECOVERY METRICS (bias, RMSE, coverage with Monte Carlo SE, PII, bound hits)
+% ============================================================================
+% Written to <output_Dir>/recovery_summary.csv. The noise model recorded with
+% each simulated replicate (-noise.mat sidecar) is checked against the current
+% study; mismatching replicates are excluded with a warning.
+[~, cadbase] = fileparts(cadfilename1_INP);
+noiseCheck = struct('inputDir', fullfile(basePath, 'input'), 'cadbase', cadbase, ...
+    'dist1', dist1, 'factor1', NaN, 'd', 1);
+switch dist1
+    case {3, 4}, noiseCheck.factor1 = noise_truth_vals(1);
+    case 5,      noiseCheck.factor1 = noise_truth_vals(1); noiseCheck.d = noise_truth_vals(2);
+    case 1,      noiseCheck.factor1 = default_or(noise_factor, 1);   % Poisson: factor ignored, stored as passed
+    otherwise,   noiseCheck = [];                          % dist1 0/2/6: no provenance check
+end
+recovery = summarizeIdentifiability(output_Dir, windowsize1, num_replicates, ...
+    estimated_indices, true_values, params_label(estimated_indices), noiseCheck);
+disp(recovery)
+
+% ============================================================================
 % PLOTTING (reads from output_Dir)
 % ============================================================================
 
@@ -248,7 +291,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
             if ub > 1
                 yline(1, 'k--', 'LineWidth', 1.2);
             end
-            ylabel(sprintf('PII (%s)', params_label{estimated_indices(p)}), ...
+            ylabel(sprintf('PII (%s)', latex_label(params_label{estimated_indices(p)})), ...
                 'Interpreter', 'latex', 'FontSize', fs_ylabel);
             if p == 1
                 title(sprintf('%s, %s', model_display, error_type), ...
@@ -304,7 +347,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
             end
             xlim([windowsize1(1) windowsize1(end)]);
             xticks(windowsize1);
-            ylabel(sprintf('PII (%s)', params_label{estimated_indices(p)}), ...
+            ylabel(sprintf('PII (%s)', latex_label(params_label{estimated_indices(p)})), ...
                 'Interpreter', 'latex', 'FontSize', fs_ylabel);
             if p == 1
                 title(sprintf('%s, %s', model_display, error_type), ...
@@ -368,10 +411,13 @@ function plot_CI_grid_figure(output_Dir, error_type, model_name, model_display, 
                 fname = result_file_path(output_Dir, r, ws, model_name, true);
                 if isfile(fname)
                     S = load(fname, 'paramss');
-                    col_median = 1 + (param_idx-1)*3;
-                    col_LB     = 2 + (param_idx-1)*3;
-                    col_UB     = 3 + (param_idx-1)*3;
-                    estimates(end+1) = S.paramss(1, col_median); %#ok<AGROW>
+                    % paramss(1, col_est) is the maximum-likelihood estimate on the
+                    % replicate's data (NOT the bootstrap median, which Run_Forecasting_
+                    % ODEModel2 stores separately in param_bootmedian).
+                    col_est = 1 + (param_idx-1)*3;
+                    col_LB  = 2 + (param_idx-1)*3;
+                    col_UB  = 3 + (param_idx-1)*3;
+                    estimates(end+1) = S.paramss(1, col_est);    %#ok<AGROW>
                     LBs(end+1)       = S.paramss(1, col_LB);     %#ok<AGROW>
                     UBs(end+1)       = S.paramss(1, col_UB);     %#ok<AGROW>
                 end
@@ -402,7 +448,7 @@ function plot_CI_grid_figure(output_Dir, error_type, model_name, model_display, 
 
             if w == 1
                 title(sprintf('%s, %s, %s', model_display, error_type, ...
-                    params_label{param_idx}), 'Interpreter', 'latex', 'FontSize', fs_title);
+                    latex_label(params_label{param_idx})), 'Interpreter', 'latex', 'FontSize', fs_title);
             end
             ylabel(sprintf('$T = %d$', ws), ...
                 'Interpreter', 'latex', 'FontSize', fs_label);
@@ -485,4 +531,70 @@ end
 
 function token = number_file_token(value1)
     token = strrep(sprintf('%g', value1), '.', 'p');
+end
+
+function [label, truth, slot_labels] = noise_label(dist1, noise_factor)
+%NOISE_LABEL Folder/title label and error-model truths derived from dist1.
+%   label       text safe for folder and file names, e.g. 'Negbin5-alpha0p5-d1p5'
+%   truth       [alpha d] used to simulate (NaN where not applicable); for
+%               dist1 = 5 the pair comes from noise_factor, a scalar means d = 1
+%               (the same rule as parseNoiseSpec in Run_simulate_ODEModel)
+%   slot_labels latex labels for the alpha and d slots of paramss
+    slot_labels = {'\alpha', 'd'};
+    truth = [NaN NaN];
+    switch dist1
+        case 1
+            label = 'Poisson';
+        case 0
+            label = sprintf('Normal-sd%s', number_file_token(default_or(noise_factor, 4)));
+        case 2
+            label = sprintf('Negbin2-factor%s', number_file_token(default_or(noise_factor, 3)));
+        case 3
+            truth(1) = default_or(noise_factor, 3);
+            label = sprintf('Negbin3-alpha%s', number_file_token(truth(1)));
+        case 4
+            truth(1) = default_or(noise_factor, 0.1);
+            label = sprintf('Negbin4-alpha%s', number_file_token(truth(1)));
+        case 5
+            if isempty(noise_factor)
+                truth = [0.5 1.5];                 % simulator default for dist1 = 5
+            elseif numel(noise_factor) == 2
+                truth = noise_factor(:)';
+            elseif numel(noise_factor) == 1
+                truth = [noise_factor 1];          % scalar => d = 1 (dist1 = 3 model)
+            else
+                error('noise_factor for dist1=5 must be [], a scalar alpha or the pair [alpha d].');
+            end
+            label = sprintf('Negbin5-alpha%s-d%s', number_file_token(truth(1)), number_file_token(truth(2)));
+        case 6
+            label = sprintf('Laplace-b%s', number_file_token(default_or(noise_factor, 20)));
+        otherwise
+            error('Unsupported dist1 = %d in the options file.', dist1);
+    end
+end
+
+function s = latex_label(s)
+%LATEX_LABEL Make a parameter label valid for the LaTeX interpreter.
+%   Labels in the options files are written for MATLAB's default (TeX)
+%   interpreter, e.g. '\alpha' or '\beta'. Under 'Interpreter','latex' a
+%   control sequence must sit inside math mode, otherwise MATLAB warns
+%   "must have valid interpreter syntax" and drops the text. Plain labels
+%   ('r', 'd', 'N') and labels already wrapped in $...$ are returned unchanged.
+    if ischar(s) || isstring(s)
+        s = char(s);
+        if contains(s, '\') && ~contains(s, '$')
+            s = ['$' s '$'];
+        end
+    end
+end
+
+function v = default_or(value1, default1)
+    if isempty(value1)
+        v = default1;
+    else
+        if numel(value1) ~= 1
+            error('noise_factor must be a scalar for this dist1 (got %s).', mat2str(value1));
+        end
+        v = value1;
+    end
 end
