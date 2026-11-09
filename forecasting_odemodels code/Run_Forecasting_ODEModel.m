@@ -897,9 +897,14 @@ for i=tstart1:1:tend1  %rolling window analysis
     % <========================================================================================>
 
 
-    if printscreen1
+    % Fixed parameters have no bootstrap spread: they get no panel and no
+    % histogram CSV. Panels are laid out up to four per row so titles do not collide.
+    freeIdx = find(params.fixed==0);
+    nCols = max(1, min(4, numel(freeIdx))); nRows = max(1, ceil(numel(freeIdx)/nCols));
+
+    if printscreen1 && ~isempty(freeIdx)
         figure(300+i*20+j)
-        tiledlayout(1,params.num,'Padding', 'compact', 'TileSpacing', 'compact')
+        tiledlayout(nRows, nCols, 'Padding', 'loose', 'TileSpacing', 'compact')   % loose padding leaves room for the axis labels
 
     end
 
@@ -908,8 +913,8 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     for j=1:params.num
 
-        if printscreen1
-            nexttile(j)
+        if printscreen1 && params.fixed(j)==0
+            nexttile(find(freeIdx==j))
             hist(Phatss_model1(:,j))
             hold on
             % Best fit to the observed data (P_model1d) as a dashed red line
@@ -943,21 +948,21 @@ for i=tstart1:1:tend1  %rolling window analysis
         params1=[params1 param_estims(j,1,cc1)  param_estims(j,2,cc1) param_estims(j,3,cc1) ];
 
         if isempty(params.label)
-            xlabel(strcat('param(',num2str(j),')'))
+            if printscreen1 && params.fixed(j)==0, xlabel(strcat('param(',num2str(j),')')), end
             cad1=strcat('param(',num2str(j),')=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
 
             paramslabels1(1+(j-1)*3:j*3)={strcat('param(',num2str(j),')'), strcat('param(',num2str(j),')_95%CI LB'), strcat('param(',num2str(j),')_95%CI UB')};
         else
-            xlabel(params.label(j))
+            if printscreen1 && params.fixed(j)==0, xlabel(params.label(j)), end
             cad1=strcat(cell2mat(params.label(j)),'=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
 
             paramslabels1(1+(j-1)*3:j*3)={cell2mat(params.label(j)), strcat(cell2mat(params.label(j)),'_95%CI LB'), strcat(cell2mat(params.label(j)),'_95%CI UB')};
         end
 
-        if printscreen1
+        if printscreen1 && params.fixed(j)==0
             ylabel('Frequency')
 
-            title(cad1)
+            title(paramTitle(cad1))
 
             set(gca,'FontSize',GetAdjustedFontSize);
             set(gcf,'color','white')
@@ -987,63 +992,12 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     paramss=[paramss;params1];
 
-    % <=======================================================================================>
-    % Bootstrap parameter estimates versus replicate-specific objective values.
-    % Each point represents a fit to a different bootstrap dataset.
-    % This is a descriptive diagnostic, not a profile-likelihood analysis.
-    % <========================================================================================>
-
-    if printscreen1
-        figure(400+i*20+j)
-        tiledlayout(1,params.num,'Padding', 'compact', 'TileSpacing', 'compact')
-
-    end
-
-    for j=1:params.num
-
-        if printscreen1
-
-            nexttile(j)
-
-            profile1=sortrows([Phatss_model1(:,j) fvals_model1],1);
-
-            plot(profile1(:,1),profile1(:,2),'bo')
-            hold on
-
-            % Apply interpolation
-            if params.fixed(j)==0
-
-                 span = 0.15; % or adjust as needed
-                 y_smooth = smoothdata(profile1(:,2), 'loess', span);
-
-
-                %x_interp=linspace(profile1(1,1),profile1(end,1),100);
-                %y_interp1 = interp1(profile1(:,1),profile1(:,2),x_interp);
-
-                plot(profile1(:,1),y_smooth, '-r', 'LineWidth', 2); % Smoothed curve
-            end
-
-        end
-
-
-        if isempty(params.label)
-            xlabel(strcat('param(',num2str(j),')'))
-            cad1=strcat('param(',num2str(j),')=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
-        else
-            xlabel(params.label(j))
-            cad1=strcat(cell2mat(params.label(j)),'=',num2str(param_estims(j,1,cc1),2),' (95% CI:',num2str(param_estims(j,2,cc1) ,2),',',num2str(param_estims(j,3,cc1) ,2),')');
-        end
-
-        if printscreen1
-            ylabel('Bootstrap fit objective function')
-
-            title(cad1)
-
-            set(gca,'FontSize', GetAdjustedFontSize);
-            set(gcf,'color','white')
-        end
-
-    end
+    % (Removed: the 'bootstrap objective vs parameter' figure. Each point was the
+    %  objective of a DIFFERENT bootstrap dataset, so its spread reflected how many
+    %  cases each replicate contained, not the shape of the likelihood, and the
+    %  figure read like a profile it was not. For the curvature of the likelihood in
+    %  one parameter use Run_ProfileLikelihood_ODEModel. The bootstrap objective
+    %  values are still saved as fvals_model1 in the bootstraps-ODEModel .mat.)
 
     cc1=cc1+1;
 
@@ -1319,4 +1273,21 @@ for k = 1:d
         mcsePII(k) = std(log10(q(2, ok)) - log10(q(1, ok)), 0, 2);
     end
 end
+end
+
+
+% <============================================================================>
+% < Two-line panel title for the parameter figures                            ==>
+% <============================================================================>
+function t = paramTitle(cad1)
+% PARAMTITLE  'label=estimate (95% CI:lb,ub)' -> {'label=estimate'; '95% CI: lb, ub'}.
+%   Splitting the estimate and its interval over two lines keeps the titles of
+%   adjacent panels from overlapping. The label keeps its TeX markup (\beta_0,
+%   \gamma_H, ...), which the default interpreter renders as intended.
+k = strfind(cad1, ' (95% CI:');
+if isempty(k) || cad1(end) ~= ')'
+    t = cad1;
+    return
+end
+t = {cad1(1:k(1)-1), ['95% CI: ' strrep(cad1(k(1)+9:end-1), ',', ', ')]};
 end
