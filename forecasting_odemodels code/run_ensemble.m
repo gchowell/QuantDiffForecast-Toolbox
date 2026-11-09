@@ -29,7 +29,10 @@ function R = run_ensemble(optionsHandles, modelNames, weight_type1, calibrationp
 %     forecastingperiod1  forecast horizon already run
 %     name_ensemble       label used in output file names
 %   Options (name/value)
-%     'tstart','tend'     rolling-window indices used when the models were run (default 1, 1)
+%     'tstart','tend'     the '-tstart-' token of the result file is the index of ONE
+%                         rolling window (the runner writes one file per window), so
+%                         'tstart' selects that window and 'tend' must equal the tend1 the
+%                         models were run with (defaults 1, 1)
 %     'Nens'              number of pooled trajectories (default: M of the members)
 %     'Seed'              seed of the pool's local random stream (default 1)
 %     'Plot'              true/false (default true)
@@ -46,7 +49,8 @@ function R = run_ensemble(optionsHandles, modelNames, weight_type1, calibrationp
 %   AICcs (nW x K), files (the .mat files read).
 %
 %   Writer-side note: the runners build the same file name inline
-%   (Run_Forecasting_ODEModel.m:791, Run_Fit_ODEModel.m:673). Replacing that
+%   (the 'Forecast-ODEModel-' strcat near the per-window save in
+%   Run_Forecasting_ODEModel.m and Run_Fit_ODEModel.m). Replacing that
 %   strcat with qdf_forecast_matname(cadfilename1, model.name, vars.fit_index(j),
 %   params.fixI0, method1, dist1, i, tend1, windowsize1, forecastingperiod)
 %   keeps writer and reader in one place; until then the helper reproduces the
@@ -88,7 +92,7 @@ R = struct('calibrationperiods', calibrationperiods1(:)', 'members', {modelNames
     'performanceC_ens', nan(nW, 4), 'performanceF_ens', nan(nW, 4), 'performanceF_ens_byhorizon', {cell(1, nW)}, ...
     'WIS_baselines', nan(nW, 2), 'relWIS_ens', nan(nW, 2), 'relWIS_models', nan(nW, K, 2), 'files', {cell(nW, K)});
 
-needVars = {'forecast_model12', 'AICcs', 'MAECSS', 'MSECSS', 'PICSS', 'WISCSS', 'MAEFSS', 'MSEFSS', 'PIFSS', 'WISFSS', ...
+needVars = {'forecast2', 'AICcs', 'MAECSS', 'MSECSS', 'PICSS', 'WISCSS', 'MAEFSS', 'MSEFSS', 'PIFSS', 'WISFSS', ...
             'timevect1', 'timevect2', 'timevect_all', 'data_all', 'data1', 'datalatest', 'forecastingperiod'};
 
 for w = 1:nW
@@ -112,8 +116,8 @@ for w = 1:nW
         if ~isempty(missing)
             error('run_ensemble:vars', '%s lacks variables %s (written by an older runner?).', fname, strjoin(missing, ', '));
         end
-        curves{k} = max(S{k}.forecast_model12, 0);
-        AICc(k) = S{k}.AICcs(1, 2);
+        curves{k} = max(S{k}.forecast2, 0);                % the per-variable slice saved with this file (forecast_model12 stacks ALL fitted variables)
+        AICc(k) = S{k}.AICcs(end, 2);                      % AICcs accumulates over rolling windows; the last row is this window's
         WISC(k) = S{k}.WISCSS(end);
         R.performanceC_models(w, :, k) = [S{k}.MAECSS(end) S{k}.MSECSS(end) S{k}.PICSS(end) S{k}.WISCSS(end)];
         if ~isempty(S{k}.MAEFSS)
@@ -144,7 +148,12 @@ for w = 1:nW
     NensW = Nens; if isempty(NensW), NensW = size(curves{1}, 2); end
     [~, forecast1, ~, ~, curvesEns] = getensemble_linearpool_from_curves(weights1, curves{:}, 'Nens', NensW, 'Seed', seed);
 
-    data1 = S{1}.data1; datalatest = S{1}.datalatest;
+    data1 = S{1}.data1(:, [1 fitIdx+1]); datalatest = S{1}.datalatest(:, [1 fitIdx+1]);   % [time, fitted variable fitIdx]
+    for k = 2:K
+        if ~isequal(size(S{k}.datalatest), size(S{1}.datalatest)) || ~isequal(S{k}.datalatest(:, [1 fitIdx+1]), datalatest)
+            error('run_ensemble:data', 'Model %d (%s) was fitted to different data than model 1; members must share the observed series.', k, modelNames{k});
+        end
+    end
     [~, MSECS, MAECS, PICS, ~, ~, MSEFS, MAEFS, PIFS, ~] = computeforecastperformance(data1, datalatest, curvesEns, curvesEns, forecastingperiod1);
     [WISC_e, WISFS_e] = computeWIS(data1, datalatest, curvesEns, forecastingperiod1);
     R.performanceC_ens(w, :) = [MAECS(end) MSECS(end) PICS(end) WISC_e(end)];
@@ -157,7 +166,7 @@ for w = 1:nW
         '-dist-', num2str(dist1_1), '-tstart-', num2str(tstart1), '-tend-', num2str(tend1), ...
         '-calibrationperiod-', num2str(windowsize1), '-horizon-', num2str(forecastingperiod1), '-', caddisease1, '-', datatype1, '.csv');
 
-    tv = S{1}.timevect_all; dA = S{1}.data_all(:, 1); nF = length(S{1}.timevect1) + forecastingperiod1;
+    tv = S{1}.timevect_all; dA = S{1}.data_all(:, fitIdx); nF = length(S{1}.timevect1) + forecastingperiod1;
     if numel(tv) >= nF
         forecastdata = [tv(1:nF) dA(1:nF) forecast1];
     else
@@ -168,7 +177,7 @@ for w = 1:nW
     writetable(Tf, fullfile(outputDir, strcat('Forecast', suffix)));
 
     Tc = array2table([windowsize1 R.performanceC_ens(w, :) weights1], ...
-        'VariableNames', [{'Calibrationperiod', 'MAE', 'MSE', 'Coverage 95%PI', 'WIS'} strcat('w_', matlab.lang.makeValidName(modelNames))]);
+        'VariableNames', [{'Calibrationperiod', 'MAE', 'MSE', 'Coverage 95%PI', 'WIS'} strcat('w_', matlab.lang.makeUniqueStrings(matlab.lang.makeValidName(cellstr(modelNames))))]);
     writetable(Tc, fullfile(outputDir, strcat('performance-calibration', suffix)));
 
     if forecastingperiod1 > 0 && ~isempty(MAEFS)

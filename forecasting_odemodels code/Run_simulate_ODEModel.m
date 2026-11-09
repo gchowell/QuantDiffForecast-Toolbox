@@ -294,6 +294,7 @@ function [factor1, d] = parseNoiseSpec(dist1, spec)
 %   the simulation meaningless; the bounds on d mirror LBe/UBe for method 5
 %   in fit_model (d is estimated inside [0.6, 5]).
 
+persistent warnedScalarD5                     % once per session, not once per replicate
 d = 1;
 if dist1 == 5
     if numel(spec) == 2
@@ -301,9 +302,12 @@ if dist1 == 5
         d = spec(2);
     elseif numel(spec) == 1
         factor1 = spec;
-        warning('Run_simulate_ODEModel:dEqualsOne', ...
-            ['dist1=5 with a scalar factor1 simulates with d = 1, which is identical to dist1=3. ', ...
-             'Pass [alpha d] to test recovery of d.']);
+        if isempty(warnedScalarD5)
+            warnedScalarD5 = true;
+            warning('Run_simulate_ODEModel:dEqualsOne', ...
+                ['dist1=5 with a scalar factor1 simulates with d = 1, which is identical to dist1=3. ', ...
+                 'Pass [alpha d] to test recovery of d. (Shown once per session.)']);
+        end
     else
         error('Run_simulate_ODEModel:factor1Shape', ...
             'For dist1=5 factor1 must be a scalar alpha or the pair [alpha d] (got %s).', mat2str(spec));

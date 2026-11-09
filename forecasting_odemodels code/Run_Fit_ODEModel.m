@@ -1206,7 +1206,8 @@ function [mcseLB, mcseUB, mcsePII] = quantileMCSE(Phatss, B2)
 [M, d] = size(Phatss);
 mcseLB = nan(1, d); mcseUB = nan(1, d); mcsePII = nan(1, d);
 if M < 2 || B2 < 2, return, end
-idx = randi(M, M, B2);                                     % one resample per column
+rs  = RandStream('mt19937ar', 'Seed', 20261030);           % local stream: the global RNG (and later windows' bootstrap draws) are untouched
+idx = randi(rs, M, M, B2);                                 % one resample per column
 for k = 1:d
     x = Phatss(:, k);
     if all(isnan(x)) || max(x) - min(x) == 0, continue, end   % pinned / degenerate

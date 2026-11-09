@@ -279,6 +279,17 @@ boundHitTol = 1e-3;
 fracLB = nan(size(SCI));
 fracUB = nan(size(SCI));
 
+% Monte Carlo standard errors of what is REPORTED: the 2.5% / 97.5% bootstrap
+% quantiles (CI endpoints) and the PII = log10(UB/LB) built from them, obtained by
+% resampling the M bootstrap estimates B2 times (no refits; see quantileMCSE).
+% MCEs (std/sqrt(M), the SE of the bootstrap MEAN) is kept for reference only.
+% Saved per replicate so summarizeIdentifiability can report the PII together
+% with its Monte Carlo noise.
+B2 = 500;                                                                                        % MCSE
+MCSE_LB  = nan(size(SCI));                                                                       % MCSE
+MCSE_UB  = nan(size(SCI));                                                                       % MCSE
+MCSE_PII = nan(size(SCI));                                                                       % MCSE
+
 RMSECSS=[];
 MSECSS=[];
 MAECSS=[];
@@ -890,6 +901,10 @@ for i=tstart1:1:tend1  %rolling window analysis
     [fracLB(cc1,:), fracUB(cc1,:)] = boundHitFractions(Phatss_model1(:,1:size(SCI,2)), ...
         LBboot(:,1:size(SCI,2)), UBboot(:,1:size(SCI,2)), boundHitTol);
 
+    % Monte Carlo SE of the CI endpoints and of the PII (bootstrap-the-bootstrap).
+    [MCSE_LB(cc1,:), MCSE_UB(cc1,:), MCSE_PII(cc1,:)] = ...                                         % MCSE
+        quantileMCSE(Phatss_model1(:,1:size(SCI,2)), B2);                                          % MCSE
+
 
     if isempty(params.composite)==0
         compositetemp=params.composite(Phatss_model1);
@@ -1127,7 +1142,7 @@ end
 fileName = sprintf('results_%s%s.mat', window_file_token, replicate_file_token);
 fullFilePath = fullfile(outputDir, fileName);
 
-save(fullFilePath, 'paramss', 'param_bootmedian', 'estimOutsideCI', 'performanceC', 'SCI', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', 'LBbox', 'UBbox', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', '-mat');
+save(fullFilePath, 'paramss', 'param_bootmedian', 'estimOutsideCI', 'performanceC', 'SCI', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', 'LBbox', 'UBbox', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', 'MCSE_LB', 'MCSE_UB', 'MCSE_PII', 'B2', '-mat');
 
 % Print bootstrap counts only; do not change fitting or retained results.
 requestedBootstrap = M * numel(numericalAudit.originalFits);
@@ -1136,3 +1151,36 @@ acceptedBootstrap = sum(cellfun(@(d) d.optimizerExitflag > 0 && ...
 fprintf('\nRequested bootstrap datasets: %d\n', requestedBootstrap);
 fprintf('Accepted bootstrap datasets: %d\n', acceptedBootstrap);
 fprintf('Unresolved bootstrap datasets: %d\n\n', requestedBootstrap - acceptedBootstrap);
+
+end % main function (explicit end required because a local function follows)
+
+
+% <============================================================================>
+% < Monte Carlo SE of bootstrap quantiles (bootstrap-the-bootstrap)           ==>
+% <============================================================================>
+function [mcseLB, mcseUB, mcsePII] = quantileMCSE(Phatss, B2)
+% QUANTILEMCSE  Monte Carlo standard error of the reported bootstrap interval.
+%   Resamples the rows of Phatss (M-by-d bootstrap estimates) with replacement
+%   B2 times, recomputes the 2.5% and 97.5% quantiles and PII = log10(q97.5/q2.5)
+%   of every column, and returns the SD across resamples: the seed-to-seed
+%   noise of the CI endpoints and of the PII. No refits are performed.
+%   Columns with zero spread (pinned parameters) and all-NaN columns give NaN.
+%   PII is NaN where a quantile is nonpositive (log10 undefined), as in SCI.
+[M, d] = size(Phatss);
+mcseLB = nan(1, d); mcseUB = nan(1, d); mcsePII = nan(1, d);
+if M < 2 || B2 < 2, return, end
+rs  = RandStream('mt19937ar', 'Seed', 20261030);           % local stream: the global RNG (and later windows' bootstrap draws) are untouched
+idx = randi(rs, M, M, B2);                                 % one resample per column
+for k = 1:d
+    x = Phatss(:, k);
+    if all(isnan(x)) || max(x) - min(x) == 0, continue, end   % pinned / degenerate
+    xr  = reshape(x(idx), M, B2);                          % M-by-B2 resampled estimates
+    q   = quantile(xr, [0.025 0.975], 1);                  % 2-by-B2
+    mcseLB(k) = std(q(1, :), 0, 2);
+    mcseUB(k) = std(q(2, :), 0, 2);
+    ok = q(1, :) > 0 & q(2, :) > 0;
+    if nnz(ok) >= 2
+        mcsePII(k) = std(log10(q(2, ok)) - log10(q(1, ok)), 0, 2);
+    end
+end
+end

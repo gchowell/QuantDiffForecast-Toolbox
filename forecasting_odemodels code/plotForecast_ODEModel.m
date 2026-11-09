@@ -889,27 +889,14 @@ fullFilePath = fullfile(outputDir, fileName);
 writetable(T, fullFilePath);
 
 % <=============================================================================================>
-% <================= Save csv file with Monte Carlo standard errors from rolling window analysis =====================>
+% <================= Monte Carlo standard errors: NOT written here ==============================>
 % <=============================================================================================>
-
-rollparams=[(tstart1:1:tend1)' MCEs(:,1:end)];
-T = array2table(rollparams);
-
-T.Properties.VariableNames(1)={'time'};
-
-if method1==3 | method1==4  %save parameter alpha. VAR=mean+alpha*mean; VAR=mean+alpha*mean^2;
-    T.Properties.VariableNames(2:(params.num+1+length(vars.fit_index))+1) = paramslabels1(1:3:end);
-elseif method1==5   % save parameters alpha and d. VAR=mean+alpha*mean^d;
-    T.Properties.VariableNames(2:(params.num+2+length(vars.fit_index))+1) =  paramslabels1(1:3:end);
-else
-    T.Properties.VariableNames(2:(params.num+length(vars.fit_index))+1) =  paramslabels1(1:3:end);
-end
-
-%writetable(T,strcat('./output/MCSEs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
-
-fileName = strcat('MCSEs-rollingwindow-','model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
-fullFilePath = fullfile(outputDir, fileName);
-writetable(T, fullFilePath);
+% The MCSEs-rollingwindow CSV is written by the runner (Run_Fit_ODEModel /
+% Run_Forecasting_ODEModel) and now holds the Monte Carlo SE of the reported CI
+% endpoints and PII (quantileMCSE), with std/sqrt(M) kept as the _SE_bootmean
+% column. This script used to rewrite the same file with std/sqrt(M) only, so
+% re-plotting a run overwrote the corrected file with the old format. MCEs is
+% still computed above for inspection; nothing is written.
 
 % <=============================================================================================>
 % <================= Save csv file with spans of CIs (SCI) from rolling window analysis ========>

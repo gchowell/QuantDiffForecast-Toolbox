@@ -17,8 +17,9 @@ function [draws, info] = baselineForecast(data1, horizon, type, Ndraws, seed, k)
 %                      and the symmetrised residual differences of the log series
 %                      (differences minus the fitted slope) supply the spread,
 %                      accumulated over h steps on the log scale. Truncated at 0.
-%   Ndraws   number of trajectories (default 6000, matching M*20 of the models;
-%            made even so antithetic pairs can be formed)
+%   Ndraws   number of trajectories (default 6000 = M*20 for the toolbox default
+%            M = 300; run_ensemble passes the members' actual draw count). Made
+%            even so antithetic pairs can be formed.
 %   seed     nonnegative integer; a local random stream is used, so the global
 %            RNG is untouched (default 1)
 %   k        number of trailing points for the 'trend' fit (ignored for 'flat')
@@ -73,8 +74,10 @@ switch lower(type)
         d = diff(y);
         sym = [d; -d];                                             % symmetrised increments
         idx = randi(rs, numel(sym), horizon, half);                % horizon x half
-        paths = cumsum(sym(idx), 1);                               % sum of h increments
-        if horizon == 1, paths = reshape(paths, 1, half); end
+        % sym(idx) follows sym's orientation when idx is a vector (horizon == 1),
+        % so reshape BEFORE the cumulative sum; otherwise the sum would run across
+        % draws instead of across horizons.
+        paths = cumsum(reshape(sym(idx), horizon, half), 1);       % sum of h increments
         fore = y(end) + [paths, -paths];                           % antithetic: exactly symmetric
     case 'trend'
         if isempty(k), k = min(7, n); end
@@ -88,8 +91,7 @@ switch lower(type)
         dl = diff(log(y + 1)) - b;                                 % detrended log increments
         sym = [dl; -dl];
         idx = randi(rs, numel(sym), horizon, half);
-        paths = cumsum(sym(idx), 1);
-        if horizon == 1, paths = reshape(paths, 1, half); end
+        paths = cumsum(reshape(sym(idx), horizon, half), 1);       % see note in the 'flat' branch
         fore = exp(mlog + [paths, -paths]) - 1;
     otherwise
         error('baselineForecast:type', 'type must be ''flat'' or ''trend'' (got ''%s'').', type);

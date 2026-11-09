@@ -257,6 +257,15 @@ boundHitTol = 1e-3;
 fracLB = nan(size(SCI));
 fracUB = nan(size(SCI));
 
+% Monte Carlo standard errors of what is REPORTED: the 2.5% / 97.5% bootstrap
+% quantiles (CI endpoints) and the PII = log10(UB/LB) built from them, by
+% resampling the M bootstrap estimates B2 times (no refits; see quantileMCSE).
+% MCEs (std/sqrt(M), the SE of the bootstrap MEAN) is kept for reference only.
+B2 = 500;                                                                                        % MCSE
+MCSE_LB  = nan(size(SCI));                                                                       % MCSE
+MCSE_UB  = nan(size(SCI));                                                                       % MCSE
+MCSE_PII = nan(size(SCI));                                                                       % MCSE
+
 RMSECSS=[];
 MSECSS=[];
 MAECSS=[];
@@ -524,7 +533,12 @@ for i=tstart1:1:tend1  %rolling window analysis
         forecast2=forecast_model12(currentEnd2+ 1 : currentEnd2 + length(data1(:,1))+forecastingperiod,:);
 
 
-        [RMSECS_model1, MSECS_model1, MAECS_model1,  PICS_model1, MISCS_model1, RMSEFS_model1, MSEFS_model1, MAEFS_model1, PIFS_model1, MISFS_model1]=computeforecastperformance(data1(:,[1 j+1]),datalatest(:,[1 j+1]),forecast1,forecast2,forecastingperiod);
+        % One predictive distribution for every score: point metrics (MAE/MSE/RMSE),
+        % the 95% PI and WIS are all computed from forecast2 (bootstrap + observation
+        % noise), the distribution whose median and quantiles are saved and plotted.
+        % forecast1 (noise-free bootstrap trajectories) is kept only as the
+        % model_median column of the Forecast CSV. Same convention as Run_Fit_ODEModel.
+        [RMSECS_model1, MSECS_model1, MAECS_model1,  PICS_model1, MISCS_model1, RMSEFS_model1, MSEFS_model1, MAEFS_model1, PIFS_model1, MISFS_model1]=computeforecastperformance(data1(:,[1 j+1]),datalatest(:,[1 j+1]),forecast2,forecast2,forecastingperiod);
 
         [WISC_model1,WISFS_model1]=computeWIS(data1(:,[1 j+1]),datalatest(:,[1 j+1]),forecast2,forecastingperiod);
 
@@ -609,7 +623,8 @@ for i=tstart1:1:tend1  %rolling window analysis
         UB1 = max(quantile(forecast2', 0.975)', 0);
         LB1 = max(quantile(forecast2', 0.025)', 0);
 
-        median1=median(forecast2,2);
+        median1=max(median(forecast2,2),0);          % predictive median, clipped at 0 like LB1/UB1
+        model_median1=max(median(forecast1,2),0);    % noise-free bootstrap median, saved for reference only
 
         if printscreen1
 
@@ -750,11 +765,10 @@ for i=tstart1:1:tend1  %rolling window analysis
 
             warning('Length of time series data is too short to evaluate the forecasting period indicated in <forecastingperiod>.')
 
-            forecastdata=[[timevect_all(1:end);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] [data_all(1:end,j);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] median1 LB1 UB1];
+            forecastdata=[[timevect_all(1:end);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] [data_all(1:end,j);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] median1 LB1 UB1 model_median1];
 
             T = array2table(forecastdata);
-            T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
-            %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+            T.Properties.VariableNames(1:6) = {'time','data','median','LB','UB','model_median'};
 
             fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
             fullFilePath = fullfile(outputDir, fileName);
@@ -763,13 +777,13 @@ for i=tstart1:1:tend1  %rolling window analysis
         else
 
             if length(data_all)>=(windowsize1+forecastingperiod)
-                forecastdata=[timevect_all(1:length(timevect1)+forecastingperiod) data_all(1:length(timevect1)+forecastingperiod,j) median1 LB1 UB1];
+                forecastdata=[timevect_all(1:length(timevect1)+forecastingperiod) data_all(1:length(timevect1)+forecastingperiod,j) median1 LB1 UB1 model_median1];
             else
-                forecastdata=[[timevect_all(1:end);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] [data_all(1:end,j);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] median1 LB1 UB1];
+                forecastdata=[[timevect_all(1:end);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] [data_all(1:end,j);zeros(windowsize1+forecastingperiod-length(data_all(:,j)),1)+NaN] median1 LB1 UB1 model_median1];
             end
 
             T = array2table(forecastdata);
-            T.Properties.VariableNames(1:5) = {'time','data','median','LB','UB'};
+            T.Properties.VariableNames(1:6) = {'time','data','median','LB','UB','model_median'};
             %writetable(T,strcat('./output/Forecast-model_name-',model.name,'-vars.fit_index-',num2str(vars.fit_index(j)),'-tstart-',num2str(i),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
 
             fileName = strcat('Forecast-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
@@ -867,11 +881,15 @@ for i=tstart1:1:tend1  %rolling window analysis
     [fracLB(cc1,:), fracUB(cc1,:)] = boundHitFractions(Phatss_model1(:,1:size(SCI,2)), ...
         LBboot(:,1:size(SCI,2)), UBboot(:,1:size(SCI,2)), boundHitTol);
 
+    % Monte Carlo SE of the CI endpoints and of the PII (bootstrap-the-bootstrap).
+    [MCSE_LB(cc1,:), MCSE_UB(cc1,:), MCSE_PII(cc1,:)] = ...                                         % MCSE
+        quantileMCSE(Phatss_model1(:,1:size(SCI,2)), B2);                                          % MCSE
+
     if isempty(params.composite)==0
         compositetemp=params.composite(Phatss_model1);
-        composite12=[composite12;[params.composite(P_model1d(:)') quantile(compositetemp,0.025) quantile(compositetemp,0.975)]]
+        composite12=[composite12;[params.composite(P_model1d(:)') quantile(compositetemp,0.025) quantile(compositetemp,0.975)]];
     else
-        composite12=[composite12;[NaN NaN NaN]]
+        composite12=[composite12;[NaN NaN NaN]];
     end
 
     % <========================================================================================>
@@ -1116,7 +1134,7 @@ end
 fileName = strcat('parameters-ODEModel-',cadfilename1,'-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-',num2str(forecastingperiod),'.mat');
 fullFilePath = fullfile(outputDir, fileName);
 
-save(fullFilePath, 'param_estims', 'param_bootmedian', 'estimOutsideCI', 'numericalAudit', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', '-mat');
+save(fullFilePath, 'param_estims', 'param_bootmedian', 'estimOutsideCI', 'numericalAudit', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', 'MCSE_LB', 'MCSE_UB', 'MCSE_PII', 'B2', '-mat');
 
 % <=============================================================================================>
 % <================= Save csv file with parameters from rolling window analysis ====================================>
@@ -1147,20 +1165,31 @@ writetable(T, fullFilePath);
 % <================= Save csv file with Monte Carlo standard errors from rolling window analysis =====================>
 % <=============================================================================================>
 
-rollparams=[(tstart1:1:tend1)' MCEs(:,1:end)];
-T = array2table(rollparams);
-
-T.Properties.VariableNames(1)={'time'};
-
-if method1==3 | method1==4  %save parameter alpha. VAR=mean+alpha*mean; VAR=mean+alpha*mean^2;
-    T.Properties.VariableNames(2:(params.num+1+length(vars.fit_index))+1) = paramslabels1(1:3:end);
-elseif method1==5   % save parameters alpha and d. VAR=mean+alpha*mean^d;
-    T.Properties.VariableNames(2:(params.num+2+length(vars.fit_index))+1) =  paramslabels1(1:3:end);
-else
-    T.Properties.VariableNames(2:(params.num+length(vars.fit_index))+1) =  paramslabels1(1:3:end);
+% One row per rolling window; for every estimated slot four columns:
+%   <p>_MCSE_CI_LB / <p>_MCSE_CI_UB  Monte Carlo SE of the reported 2.5% / 97.5% quantiles
+%   <p>_MCSE_PII                     Monte Carlo SE of PII = log10(UB/LB), in log10 units
+%   <p>_SE_bootmean                  std/sqrt(M): SE of the bootstrap MEAN (reference only;
+%                                    the only column in earlier versions, NOT the precision
+%                                    of the reported interval)
+% plus M_bootstrap and B2_resamples. NaN marks a pinned (fixed) slot.
+labsMC = paramslabels1(1:3:end);
+nSlot  = size(SCI,2);
+labsMC = labsMC(1:nSlot);
+mcTable = zeros(length(tstart1:1:tend1), 1 + 4*nSlot + 2);
+mcNames = cell(1, 1 + 4*nSlot + 2);
+mcTable(:,1) = (tstart1:1:tend1)';  mcNames{1} = 'time';
+for k = 1:nSlot
+    c = 1 + (k-1)*4;
+    mcTable(:, c+1) = MCSE_LB(:,k);   mcNames{c+1} = strcat(labsMC{k}, '_MCSE_CI_LB');
+    mcTable(:, c+2) = MCSE_UB(:,k);   mcNames{c+2} = strcat(labsMC{k}, '_MCSE_CI_UB');
+    mcTable(:, c+3) = MCSE_PII(:,k);  mcNames{c+3} = strcat(labsMC{k}, '_MCSE_PII');
+    mcTable(:, c+4) = MCEs(:,k);      mcNames{c+4} = strcat(labsMC{k}, '_SE_bootmean');
 end
+mcTable(:, end-1) = M;   mcNames{end-1} = 'M_bootstrap';
+mcTable(:, end)   = B2;  mcNames{end}   = 'B2_resamples';
 
-%writetable(T,strcat('./output/MCSEs-rollingwindow-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv'))
+T = array2table(mcTable);
+T.Properties.VariableNames = mcNames;
 
 fileName = strcat('MCSEs-rollingwindow-','model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
 fullFilePath = fullfile(outputDir, fileName);
@@ -1258,3 +1287,36 @@ acceptedBootstrap = sum(cellfun(@(d) d.optimizerExitflag > 0 && ...
 fprintf('\nRequested bootstrap datasets: %d\n', requestedBootstrap);
 fprintf('Accepted bootstrap datasets: %d\n', acceptedBootstrap);
 fprintf('Unresolved bootstrap datasets: %d\n\n', requestedBootstrap - acceptedBootstrap);
+
+end % main function (explicit end required because a local function follows)
+
+
+% <============================================================================>
+% < Monte Carlo SE of bootstrap quantiles (bootstrap-the-bootstrap)           ==>
+% <============================================================================>
+function [mcseLB, mcseUB, mcsePII] = quantileMCSE(Phatss, B2)
+% QUANTILEMCSE  Monte Carlo standard error of the reported bootstrap interval.
+%   Resamples the rows of Phatss (M-by-d bootstrap estimates) with replacement
+%   B2 times, recomputes the 2.5% and 97.5% quantiles and PII = log10(q97.5/q2.5)
+%   of every column, and returns the SD across resamples: the seed-to-seed
+%   noise of the CI endpoints and of the PII. No refits are performed.
+%   Columns with zero spread (pinned parameters) and all-NaN columns give NaN.
+%   PII is NaN where a quantile is nonpositive (log10 undefined), as in SCI.
+[M, d] = size(Phatss);
+mcseLB = nan(1, d); mcseUB = nan(1, d); mcsePII = nan(1, d);
+if M < 2 || B2 < 2, return, end
+rs  = RandStream('mt19937ar', 'Seed', 20261030);           % local stream: the global RNG (and later windows' bootstrap draws) are untouched
+idx = randi(rs, M, M, B2);                                 % one resample per column
+for k = 1:d
+    x = Phatss(:, k);
+    if all(isnan(x)) || max(x) - min(x) == 0, continue, end   % pinned / degenerate
+    xr  = reshape(x(idx), M, B2);                          % M-by-B2 resampled estimates
+    q   = quantile(xr, [0.025 0.975], 1);                  % 2-by-B2
+    mcseLB(k) = std(q(1, :), 0, 2);
+    mcseUB(k) = std(q(2, :), 0, 2);
+    ok = q(1, :) > 0 & q(2, :) > 0;
+    if nnz(ok) >= 2
+        mcsePII(k) = std(log10(q(2, ok)) - log10(q(1, ok)), 0, 2);
+    end
+end
+end

@@ -11,8 +11,9 @@ function S = summarizeIdentifiability(output_Dir, windowsize1, num_replicates, .
 %   size W and estimated slot with:
 %
 %     files            result files found for this W
-%     converged        replicates whose point fit converged (numericalAudit);
-%                      only these enter the metrics below
+%     converged        replicates that enter the metrics: point fit converged
+%                      (numericalAudit) AND, when noiseCheck is given, noise
+%                      provenance matched
 %     bias_MLE         mean(MLE) - truth               (MLE = paramss(:,1), the
 %                      maximum-likelihood fit to the replicate's data)
 %     relbias_MLE      bias_MLE / truth                (NaN when truth == 0)
@@ -22,6 +23,10 @@ function S = summarizeIdentifiability(output_Dir, windowsize1, num_replicates, .
 %                      [paramss(:,2), paramss(:,3)] contains the truth
 %     coverage_MCSE    binomial Monte Carlo SE of coverage95, sqrt(c(1-c)/n)
 %     median_PII       median over replicates of SCI = log10(UB/LB)
+%     median_MCSE_PII  median over replicates of the Monte Carlo SE of that PII
+%                      (quantileMCSE in the runner; NaN for result files written
+%                      before MCSE_PII was saved). A PII difference between two
+%                      window sizes smaller than ~2 x this is within bootstrap noise.
 %     frac_bound_hits  share of replicates where more than 5% of the bootstrap
 %                      draws sat on a bound (fracLB + fracUB > 0.05): a narrow
 %                      interval with a high value here is censored, not identified
@@ -92,12 +97,12 @@ if numel(true_values) ~= numel(estimated_indices) || numel(labels) ~= numel(esti
 end
 
 nP = numel(estimated_indices);
-rows = cell(0, 13);
+rows = cell(0, 14);
 missingSidecarWarned = false;
 
 for w = 1:numel(windowsize1)
     W = windowsize1(w);
-    est = []; med = []; lb = []; ub = []; pii = []; hit = [];
+    est = []; med = []; lb = []; ub = []; pii = []; hit = []; mcse = [];
     nfiles = 0; nconv = 0; nmismatch = 0;
 
     for r = 1:num_replicates
@@ -106,6 +111,8 @@ for w = 1:numel(windowsize1)
         nfiles = nfiles + 1;
 
         R = load(f, 'paramss', 'param_bootmedian', 'SCI', 'fracLB', 'fracUB', 'numericalAudit');
+        W0 = whos('-file', f); hasMCSE = any(strcmp({W0.name}, 'MCSE_PII'));
+        if hasMCSE, Rm = load(f, 'MCSE_PII'); end
 
         % Convergence filter: the point fit on the replicate's data.
         ok = true;
@@ -123,9 +130,11 @@ for w = 1:numel(windowsize1)
                 sprintf('%s-windowsize-%d-replicate-%d-noise.mat', noiseCheck.cadbase, W, r));
             if isfile(side)
                 N = load(side, 'noiseTruth');
-                same = N.noiseTruth.dist1 == noiseCheck.dist1 && ...
-                       abs(N.noiseTruth.factor1 - noiseCheck.factor1) <= 1e-12 * max(1, abs(noiseCheck.factor1)) && ...
-                       abs(N.noiseTruth.d - noiseCheck.d) <= 1e-12;
+                same = N.noiseTruth.dist1 == noiseCheck.dist1;
+                if same && noiseCheck.dist1 ~= 1          % Poisson has no noise parameter: compare dist1 only
+                    same = abs(N.noiseTruth.factor1 - noiseCheck.factor1) <= 1e-12 * max(1, abs(noiseCheck.factor1)) && ...
+                           abs(N.noiseTruth.d - noiseCheck.d) <= 1e-12;
+                end
                 if ~same
                     nmismatch = nmismatch + 1;
                     warning('summarizeIdentifiability:noiseMismatch', ...
@@ -153,8 +162,13 @@ for w = 1:numel(windowsize1)
             med(end+1, :) = nan(1, nP);                        %#ok<AGROW>
         end
         pii(end+1, :) = R.SCI(1, estimated_indices);           %#ok<AGROW>
+        if hasMCSE
+            mcse(end+1, :) = Rm.MCSE_PII(1, estimated_indices);  %#ok<AGROW>
+        else
+            mcse(end+1, :) = nan(1, nP);                       %#ok<AGROW>
+        end
         if isfield(R, 'fracLB') && isfield(R, 'fracUB')
-            hit(end+1, :) = (R.fracLB(1, estimated_indices) + R.fracUB(1, estimated_indices)) > 0.05; %#ok<AGROW>
+            hit(end+1, :) = double((R.fracLB(1, estimated_indices) + R.fracUB(1, estimated_indices)) > 0.05); %#ok<AGROW>
         else
             hit(end+1, :) = nan(1, nP);                        %#ok<AGROW>
         end
@@ -164,15 +178,15 @@ for w = 1:numel(windowsize1)
     for p = 1:nP
         th = true_values(p);
         if n == 0
-            rows(end+1, :) = {W, labels{p}, th, nfiles, 0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN}; %#ok<AGROW>
+            rows(end+1, :) = {W, labels{p}, th, nfiles, 0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN}; %#ok<AGROW>
             continue
         end
-        cov = mean(lb(:, p) <= th & th <= ub(:, p));
+        covg = mean(lb(:, p) <= th & th <= ub(:, p));
         biasMLE = mean(est(:, p)) - th;
         if th ~= 0, relbias = biasMLE / th; else, relbias = NaN; end
         rows(end+1, :) = {W, labels{p}, th, nfiles, nconv, ...             %#ok<AGROW>
             biasMLE, relbias, mean(med(:, p)) - th, sqrt(mean((est(:, p) - th).^2)), ...
-            cov, sqrt(cov * (1 - cov) / n), median(pii(:, p)), mean(hit(:, p), 'omitnan')};
+            covg, sqrt(covg * (1 - covg) / n), median(pii(:, p)), median(mcse(:, p), 'omitnan'), mean(hit(:, p), 'omitnan')};
     end
     if nmismatch > 0
         fprintf('W = %d: %d replicate(s) excluded for noise-model mismatch.\n', W, nmismatch);
@@ -181,7 +195,7 @@ end
 
 S = cell2table(rows, 'VariableNames', {'W', 'parameter', 'truth', 'files', 'converged', ...
     'bias_MLE', 'relbias_MLE', 'bias_bootmedian', 'RMSE_MLE', ...
-    'coverage95', 'coverage_MCSE', 'median_PII', 'frac_bound_hits'});
+    'coverage95', 'coverage_MCSE', 'median_PII', 'median_MCSE_PII', 'frac_bound_hits'});
 
 writetable(S, fullfile(output_Dir, 'recovery_summary.csv'));
 end
