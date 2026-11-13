@@ -59,6 +59,10 @@ datatype=datatype_INP;
 
 d=1;
 
+% Stop now, before any work is done, if the options file selects an unsupported
+% estimation method (e.g. method1 = 2).
+quantdiffCheckMethod(method1, mfilename);
+
 dist1=dist1_INP; %Define dist1 which is the type of error structure:
 
 if method1>0
@@ -67,10 +71,11 @@ end
 
 % LSQ=0,
 % MLE Poisson=1,
-% Pearson chi-squard=2,
 % MLE (Neg Binomial)=3, with VAR=mean+alpha*mean;
 % MLE (Neg Binomial)=4, with VAR=mean+alpha*mean^2;
 % MLE (Neg Binomial)=5, with VAR=mean+alpha*mean^d;
+% SAD (Laplace)=6;
+% (2 is not an estimation method; dist1=2 is the NB bootstrap noise used with LSQ)
 
 
 numstartpoints=numstartpoints_INP; % Number of initial guesses for optimization procedure using MultiStart
@@ -209,17 +214,23 @@ printscreen1=printscreen1_INP;
 
 numparams=get_nparams(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0));
 
+% Observations the fit has to explain: with params.fixI0 = 1 the first point of
+% every fitted series is matched exactly by construction and is not counted
+% (see quantdiffEffectiveN).
+[nEffWindow, nEffInfo]=quantdiffEffectiveN(windowsize1*length(vars.fit_index),length(vars.fit_index),params.fixI0);
+
 numparams
-windowsize1*length(vars.fit_index)
+nEffWindow
 
 % AICc's small-sample correction divides by n - numparams - 1, so the window
-% needs at least numparams + 2 data points (numparams <= n - 2).
-if numparams>=windowsize1*length(vars.fit_index)-1
+% needs at least numparams + 2 informative data points (numparams <= n - 2).
+if numparams>=nEffWindow-1
 
-    error(['The calibration window has %d data points but %d quantities are estimated ' ...
-        '(model parameters, free initial values and error-model parameters). AICc needs at least %d data points: ' ...
+    error(['The calibration window has %d informative data points (%d observations, %d of them fixed ' ...
+        'first points) but %d quantities are estimated (model parameters, free initial values and ' ...
+        'error-model parameters). AICc needs at least %d informative data points: ' ...
         'increase the length of the calibration period or fix more parameters.'], ...
-        windowsize1*length(vars.fit_index), numparams, numparams+2)
+        nEffWindow, nEffInfo.nObs, nEffInfo.pinnedPoints, numparams, numparams+2)
 
 end
 
@@ -249,6 +260,12 @@ end
 % <==================================================================================>
 % ============================ Rolling window analysis=====================================>
 % <==================================================================================>
+
+% Count likelihoods (method1 = 1, 3, 4, 5) cannot fit negative observations: stop
+% now, before any fitting, and list the offending rows of every calibration
+% window (rows tstart1 .. tend1+windowsize1-1). Rows used only to evaluate
+% forecasts are not checked.
+quantdiffCheckNegativeData(method1, data, tstart1:(tend1+windowsize1-1), mfilename);
 
 param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % point estimate (best fit to the data), 95% CI: LB, UB
 
@@ -318,7 +335,18 @@ performanceF_all = [];
 
 cc1=1;
 
+% dist1 (the error structure requested by the options file) is never changed
+% inside the loop: it is part of every output file name, which the plotting and
+% ensemble functions rebuild from the options file. The noise model actually
+% used by the bootstrap of each window is dist1_boot (it differs from dist1 only
+% when a window falls back to Poisson noise) and is recorded in noiseLog:
+% one row per window, [tstart dist1 dist1_boot factor1 d rawEstimate].
+noiseLog=[];
+
 for i=tstart1:1:tend1  %rolling window analysis
+
+    dist1_boot=[];        % set below; [] = same as dist1
+    noiseRaw=NaN;         % dispersion / scale estimate before any fallback
 
     t_window=i:1:i+windowsize1-1;
 
@@ -367,7 +395,11 @@ for i=tstart1:1:tend1  %rolling window analysis
     LBbox = fitDiagnostics_model1d.LB;  UBbox = fitDiagnostics_model1d.UB;
     PII_box(cc1,:) = log10(UBbox(1:size(SCI,2))) - log10(LBbox(1:size(SCI,2)));
 
-    [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,length(ydata))
+    % Sample size for AICc and the residual variance: the fixed first point of
+    % each series (params.fixI0 = 1) is not counted (quantdiffEffectiveN).
+    nEff=quantdiffEffectiveN(length(ydata),length(vars.fit_index),params.fixI0);
+
+    [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,nEff)
 
     AICcs=[AICcs;[i AICc part1 part2 numparams]];
 
@@ -375,33 +407,44 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         factor1=1;
 
-    elseif (method1==0 & dist1==2)  % estimate <factor1> which is the variance to mean ratio to scale the NB error structure
+    elseif (method1==0 & dist1==2)  % NB bootstrap noise with VAR = factor1*mean
 
-        binsize1=7;
+        % Pearson dispersion of the data around the FITTED curve (quasi-Poisson
+        % estimator), so the epidemic trend is not counted as noise. Replaces the
+        % var/mean ratio of bins of the raw data, which was inflated by the trend.
+        % The divisor is n minus the estimated quantities of the CURVE: numparams
+        % also counts the Gaussian variance of the least-squares fit, hence the -1.
+        [factor1, dispInfo] = estimatePearsonDispersion(ydata, fitcurve_model1d, numparams-1, ...
+            length(vars.fit_index), params.fixI0);
+        noiseRaw=factor1;
 
-        if length(ydata)<binsize1*3
-            binsize1=round(binsize1/2);
-
+        if ~isfinite(factor1)
+            warning('QuantDiffForecast:dispersion', ...
+                ['Window %d: the dispersion cannot be estimated: %d usable points for %d curve parameters ' ...
+                 '(%d points excluded because the fitted mean is below %g, %d fixed first points). ' ...
+                 'If the data are rates or proportions rather than counts, the VAR = factor*mean noise ' ...
+                 'model (dist1 = 2) does not apply. Using Poisson bootstrap noise for this window.'], ...
+                i, dispInfo.nUsed, numparams-1, dispInfo.excludedSmallMean, dispInfo.minMean, dispInfo.excludedFixed);
         end
 
-        [ratios,~]=getMeanVarianceRatio(ydata,binsize1,1);
-
-        index1=find(ratios(:,1)>0);
-
-        factor1=mean(ratios(index1,1));
-
-        if factor1<1
-            dist1=1;
+        % VAR = factor1*mean needs factor1 > 1 (factor1 = 1 gives an NB with
+        % infinite size). Not over-dispersed -> Poisson noise for THIS window's
+        % bootstrap only (dist1_boot); dist1 and the output file names are unchanged.
+        if ~isfinite(factor1) || factor1 <= 1
+            dist1_boot=1;
             factor1=1;
         end
-
 
     elseif method1==0 & dist1==0 % normal distribution of the error structure
 
         size(fitcurve_model1d)
         size(ydata)
 
-        var1=sum((fitcurve_model1d-ydata).^2)./(length(fitcurve_model1d)-numparams); % last revised: 01 June 2022
+        % Residual variance: SSE over the informative points minus the estimated
+        % quantities of the CURVE. nEff leaves out the fixed first points; numparams
+        % also counts the Gaussian variance itself, hence the -1. (For one fitted
+        % series with fixI0 = 1 this equals the former SSE/(n - numparams).)
+        var1=sum((fitcurve_model1d-ydata).^2)./(nEff-(numparams-1));
         factor1=sqrt(var1);
 
     elseif method1==1
@@ -429,14 +472,38 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         factor1=alpha;
 
-    elseif method1==6 % normal distribution of the error structure
+    elseif method1==6 % Laplace error structure (SAD fit)
 
         dist1=6;
 
-        var1=sum((fitcurve_model1d-ydata).^2)./(length(fitcurve_model1d)-numparams); % last revised: 01 June 2022
-        factor1=sqrt(var1)/sqrt(2);
+        % Laplace scale from the mean absolute residual: the maximum-likelihood value
+        % SAD/n (as in getAICc and the profile likelihood) with the small-sample
+        % correction SAD/(n - p/2). numparams counts the Laplace scale itself, so the
+        % curve has numparams-1 estimated quantities. Robust to outliers (the former
+        % SD/sqrt(2) squared the residuals).
+        [factor1, laplaceInfo] = estimateLaplaceScale(ydata, fitcurve_model1d, numparams-1, ...
+            length(vars.fit_index), params.fixI0);
+        noiseRaw=factor1;
+
+        if ~isfinite(factor1)
+            % Too few free points for the corrected estimate: use the plain
+            % maximum-likelihood scale over all points instead of stopping the run.
+            factor1=sum(abs(fitcurve_model1d(:)-ydata(:)))/numel(ydata);
+            warning('QuantDiffForecast:laplaceScale', ...
+                'Window %d: only %d usable points for %d curve parameters; using the uncorrected Laplace scale SAD/n = %g.', ...
+                i, laplaceInfo.nUsed, numparams-1, factor1);
+        end
+        if ~(factor1 > 0)
+            error('QuantDiffForecast:laplaceScale', ...
+                'Window %d: the Laplace scale is %g (an exact fit); the Laplace bootstrap needs a positive scale.', i, factor1);
+        end
 
     end
+
+    if isempty(dist1_boot)
+        dist1_boot=dist1;
+    end
+    noiseLog=[noiseLog;[i dist1 dist1_boot factor1 d noiseRaw]];
 
 
     % <===========================================================================================>
@@ -462,7 +529,7 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     for j=1:M
 
-        f_model1_sim=AddErrorStructure(cumsum(fitcurve_model1d),1,dist1,factor1,d);
+        f_model1_sim=AddErrorStructure(cumsum(fitcurve_model1d),1,dist1_boot,factor1,d);
 
         f_model1_sims=[f_model1_sims f_model1_sim];
 
@@ -489,13 +556,13 @@ for i=tstart1:1:tend1  %rolling window analysis
             Ys(i2,j)={F2(:,i2)};
         end
 
-        if (method1==0 & (dist1==0 | dist1==2)) | (method1==6 & dist1==6)
+        if (method1==0 & (dist1_boot==0 | dist1_boot==2)) | (method1==6 & dist1_boot==6)
 
-            forecast_model12=[forecast_model12 AddErrorStructure(cumsum(forecastcurve_model1),20,dist1,factor1,0)];
+            forecast_model12=[forecast_model12 AddErrorStructure(cumsum(forecastcurve_model1),20,dist1_boot,factor1,0)];
 
         else
 
-            forecast_model12=[forecast_model12 AddErrorStructure(cumsum(forecastcurve_model1),20,dist1,P_model1(end-1),P_model1(end))];
+            forecast_model12=[forecast_model12 AddErrorStructure(cumsum(forecastcurve_model1),20,dist1_boot,P_model1(end-1),P_model1(end))];
 
         end
 

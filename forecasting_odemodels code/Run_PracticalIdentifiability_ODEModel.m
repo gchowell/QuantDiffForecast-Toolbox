@@ -98,6 +98,10 @@ datatype=datatype_INP;
 % (d is no longer set here: the variance exponent used for simulation comes
 %  back from Run_simulate_ODEModel in noiseTruth.d)
 
+% Stop now, before any work is done, if the options file selects an unsupported
+% estimation method (e.g. method1 = 2).
+quantdiffCheckMethod(method1, mfilename);
+
 dist1=dist1_INP; %Define dist1 which is the type of error structure:
 
 if method1>0

@@ -72,10 +72,10 @@ function PL = Run_ProfileLikelihood_ODEModel(options_pass, tstart1_pass, windows
 %     method1 in {1,3,4,5}: fit_model's fval is a negative log-likelihood
 %                           (constants omitted), so D = 2*(fval - fmin).
 %     method1 == 0        : fval is a sum of squares; with the Gaussian variance
-%                           profiled out, D = n*log(fval/fmin). Note that this is a
+%                           profiled out, D = n*log(fval/fmin), n = informative points (quantdiffEffectiveN). Note that this is a
 %                           Gaussian interpretation whatever dist1 the bootstrap uses.
 %     method1 == 6        : fval is a sum of absolute deviations; with the Laplace
-%                           scale profiled out, D = 2*n*log(fval/fmin).
+%                           scale profiled out, D = 2*n*log(fval/fmin), same n.
 %     Methods 0 and 6 are refused when fmin ~ 0 (an exact fit), since the ratio is
 %     then undefined; use a likelihood objective or add noise.
 %
@@ -185,6 +185,10 @@ end
 
 params.num = length(params.label);
 vars.num   = length(vars.label);
+
+% Stop now, before any work is done, if the options file selects an unsupported
+% estimation method (e.g. method1 = 2).
+quantdiffCheckMethod(method1, mfilename);
 
 if method1 > 0
     dist1 = method1;
@@ -335,10 +339,19 @@ if tstart1 + windowsize1 - 1 > size(data, 1)
 end
 
 t_window = tstart1:(tstart1 + windowsize1 - 1);
+
+% Count likelihoods (method1 = 1, 3, 4, 5) cannot fit negative observations: stop
+% now, before any fitting, and list the offending rows of the calibration window.
+quantdiffCheckNegativeData(method1, data, t_window, mfilename);
+
 datac    = data(t_window, 2:end);
 data1    = [data(t_window, 1) datac];
 I0       = datac(1, :);
 n        = numel(datac);
+% Sample size of the profiled-scale deviance (methods 0 and 6) and of the
+% parameter-count check: the fixed first point of each series (params.fixI0 = 1)
+% is not counted (quantdiffEffectiveN).
+nEff     = quantdiffEffectiveN(n, length(vars.fit_index), params.fixI0);
 
 if params.fixI0
     params0 = [params.initial I0 1 1];
@@ -347,8 +360,8 @@ else
 end
 
 numparams = get_nparams(method1, dist1, sum(params.fixed == 0), length(vars.fit_index) .* (params.fixI0 == 0));
-if numparams >= n
-    error('Number of estimated parameters (%d) must be smaller than the number of data points (%d).', numparams, n);
+if numparams >= nEff
+    error('Number of estimated parameters (%d) must be smaller than the number of informative data points (%d of %d; fixed first points are not counted).', numparams, nEff, n);
 end
 
 nfit   = length(vars.fit_index);
@@ -365,10 +378,10 @@ switch method1
         devfun = @(f, fmin) 2 * (f - fmin);
         objname = 'negative log-likelihood';
     case 0
-        devfun = @(f, fmin) n * log(f ./ fmin);
+        devfun = @(f, fmin) nEff * log(f ./ fmin);
         objname = 'sum of squared residuals (Gaussian, variance profiled out)';
     case 6
-        devfun = @(f, fmin) 2 * n * log(f ./ fmin);
+        devfun = @(f, fmin) 2 * nEff * log(f ./ fmin);
         objname = 'sum of absolute deviations (Laplace, scale profiled out)';
     otherwise
         error('Unsupported method1 = %d.', method1);

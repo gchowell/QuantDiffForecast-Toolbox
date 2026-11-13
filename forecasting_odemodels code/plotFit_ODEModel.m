@@ -64,10 +64,11 @@ end
 
 % LSQ=0,
 % MLE Poisson=1,
-% Pearson chi-squard=2,
 % MLE (Neg Binomial)=3, with VAR=mean+alpha*mean;
 % MLE (Neg Binomial)=4, with VAR=mean+alpha*mean^2;
 % MLE (Neg Binomial)=5, with VAR=mean+alpha*mean^d;
+% SAD (Laplace)=6;
+% (2 is not an estimation method; dist1=2 is the NB bootstrap noise used with LSQ)
 
 
 numstartpoints=numstartpoints_INP; % Number of initial guesses for optimization procedure using MultiStart

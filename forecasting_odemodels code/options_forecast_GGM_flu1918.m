@@ -78,7 +78,7 @@ params.LB=[0 0];  % lower bound values of the parameter estimates
 params.UB=[10 1]; % upper bound values of the parameter estimates
 params.initial=[0.18 0.9]; % initial parameter values/guesses
 params.fixed=[0 0]; % Boolean vector to indicate any parameters that should remain fixed (1) to initial values indicated in params.initial. Otherwise the parameter is estimated (0).
-params.fixI0=1; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters.
+params.fixI0=0; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters.
 params.composite='';  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
 params.extra0=[]; % used to pass pass any extra parameters (e.g., data, static variables) to the model function
 

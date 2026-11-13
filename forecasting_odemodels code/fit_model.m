@@ -100,6 +100,7 @@ for i = 1:params.num
 end
 
 % Set extended bounds based on the method specified
+quantdiffCheckMethod(method1, 'fit_model');   % clear error for an unsupported method (e.g. 2)
 switch method1
     case {0, 1,6}
         % Cases 0 and 1 have no extension on bounds
@@ -113,6 +114,10 @@ switch method1
         % Case 5 has specific limits for d, assuming it should be >=1
         LBe = [1e-8, 0.6];
         UBe = [1e4, 5];
+    otherwise
+        % Not reachable after quantdiffCheckMethod; kept so LBe/UBe can never be undefined.
+        error('QuantDiffForecast:UnsupportedMethod', ...
+            'fit_model: method1 = %g is not supported; use 0, 1, 3, 4, 5 or 6.', method1);
 end
 
 % Configure bounds based on whether initial conditions are fixed
@@ -192,8 +197,46 @@ nFree = numel(free);
 span  = UB - LB;
 
 % tf marks the coordinates that are log10-transformed before the unit mapping.
+persistent logscaleWarned          % keys already warned about (logscale ignored for LB <= 0)
 if useLog
     tf = (LB > 0) & (UB > LB);
+    % logscale only applies to coordinates with a positive lower bound. Warn when
+    % an estimated coordinate is left on the linear scale because its LB <= 0,
+    % once per (model, coordinate set) per session so bootstrap refits stay quiet.
+    linFree = find((UB > LB) & ~(LB > 0));
+    if ~isempty(linFree)
+        if isempty(logscaleWarned), logscaleWarned = {}; end
+        mname = '';
+        if isstruct(model) && isfield(model, 'name'), mname = char(model.name); end
+        key = sprintf('%s|%s', mname, mat2str(linFree));
+        if ~any(strcmp(logscaleWarned, key))
+            logscaleWarned{end+1} = key;
+            nX0 = numel(I0);
+            names = cell(1, numel(linFree));
+            for jj = 1:numel(linFree)
+                ii = linFree(jj);
+                if ii <= params.num
+                    if isfield(params, 'label') && numel(params.label) >= ii
+                        names{jj} = sprintf('%s (LB=%g)', char(params.label{ii}), LB(ii));
+                    else
+                        names{jj} = sprintf('param %d (LB=%g)', ii, LB(ii));
+                    end
+                elseif ii <= params.num + nX0
+                    names{jj} = sprintf('X0(%d) (LB=%g)', ii - params.num, LB(ii));
+                elseif ii == params.num + nX0 + 1
+                    names{jj} = sprintf('alpha (LB=%g)', LB(ii));
+                else
+                    names{jj} = sprintf('d (LB=%g)', LB(ii));
+                end
+            end
+            warning('fit_model:logscaleIgnored', ...
+                ['params.logscale is true, but these estimated quantities have a lower bound <= 0 ' ...
+                 'and are searched on the LINEAR scale: %s. To search them in log10, set a small ' ...
+                 'positive lower bound in params.LB (e.g. 1e-4 of the upper bound). ' ...
+                 'Silence with warning(''off'',''fit_model:logscaleIgnored'').'], ...
+                strjoin(names, ', '));
+        end
+    end
 else
     tf = false(1, d);
 end
