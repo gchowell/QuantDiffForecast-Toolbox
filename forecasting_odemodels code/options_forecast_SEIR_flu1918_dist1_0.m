@@ -2,9 +2,9 @@
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
 
-function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, params,vars,getperformance, forecastingperiod,windowsize1,tstart1,tend1,printscreen1]=options_forecast
+function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, params,vars,getperformance, forecastingperiod,windowsize1,tstart1,tend1,printscreen1]=options_forecast_SEIR_flu1918_dist1_0
 
-% OPTIONS_FORECAST  Configure QuantDiffForecast rolling-window forecasting run
+% OPTIONS_FORECAST_SEIR_FLU1918_DIST1_0  Configure QuantDiffForecast rolling-window forecasting run
 %
 % Overview
 %   Returns all configuration needed by Run_Forecasting_ODEModel to (i) calibrate
@@ -14,10 +14,10 @@ function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, para
 % Usage
 %   [cadfilename1, caddisease, datatype, dist1, numstartpoints, B, ...
 %    model, params, vars, getperformance, forecastingperiod, ...
-%    windowsize1, tstart1, tend1, printscreen1] = options_forecast;
+%    windowsize1, tstart1, tend1, printscreen1] = options_forecast_SEIR_flu1918_dist1_0;
 %
 % Typical run
-%   Run_Forecasting_ODEModel(@options_forecast, 1, 1, 17, 10);
+%   Run_Forecasting_ODEModel(@options_forecast_SEIR_flu1918_dist1_0, 1, 1, 17, 10);
 %
 % Outputs (returned by this options function)
 %   cadfilename1     char     Base filename of input series (looked for in ./input)
@@ -38,6 +38,20 @@ function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, para
 %                              .fixI0     (logical)  1=fix initial observed state to first datum; 0=estimate
 %                              .composite (function) handle for composite metric (e.g., @R0s) or []
 %                              .composite_name (char) name of composite metric (e.g., 'R_0')
+%                              .extra0    (any)      optional constants passed into the model function
+%                             Optimizer settings (read by fit_model; all optional):
+%                              .logscale  (logical)  1=search in log10 of positive-bounded parameters
+%                                                    (recommended when an estimated parameter spans
+%                                                    several orders of magnitude, e.g. K, N, alpha)
+%                              .optimOptions (struct) fmincon overrides, e.g.
+%                                                    struct('StepTolerance',1e-8,'FunctionTolerance',1e-8);
+%                                                    [] keeps the toolbox defaults
+%                              .useParallel (logical) 1=run MultiStart local solves on a parallel pool
+%                                                    (Parallel Computing Toolbox; serial if no pool)
+%                              .polish    (logical)  1=Nelder-Mead polish of the MultiStart solution
+%                              .polish_gradient_tol (scalar) polish only if the scaled gradient at the
+%                                                    sqp solution exceeds this value (default 1e-2)
+%                              .polish_budget (int)  Nelder-Mead evaluations per free parameter (default 100)
 %   vars             struct   State/fit settings:
 %                              .num      (int)       number of state variables
 %                              .label    (cellstr)   names (e.g., {'S','E','I','R','C'})
@@ -78,6 +92,9 @@ function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, para
 %     set to 0 to estimate it jointly with other parameters.
 %   • (tstart1, tend1) index rolling windows, not calendar dates.
 %   • Defaults in this file instantiate an SEIR model for the 1918 SF dataset.
+%   • Convergence of every fit can be checked in fitDiagnostics (returned by
+%     fit_model): startAgreement close to 1 and a small scaledGradientInfNorm
+%     mean the local runs agree and the solution is stationary.
 %
 % Dependencies
 %   Optimization Toolbox (e.g., fmincon as local solver)
@@ -171,7 +188,20 @@ params.fixed=[0 1 1 1]; % Boolean vector to indicate any parameters that should 
 params.fixI0=1; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters (0).
 params.composite=@R0s_SEIR;  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
 params.composite_name='R_0'; % Name of the composite parameter
-params.extra0=[];
+params.extra0=[]; % optional constants passed into the model function (empty if none)
+
+% <==============================================================================>
+% <========================== Optimizer settings (fit_model) ====================>
+% <==============================================================================>
+% All optional; see the header of fit_model.m. The optimizer searches only the
+% estimated parameters, each rescaled to [0,1] by its bounds.
+
+params.logscale=true; % search in log10 of positive-bounded parameters (recommended when an estimated parameter spans several orders of magnitude, e.g. K, N or alpha in methods 3-5)
+params.optimOptions=[]; % fmincon overrides, e.g. struct('StepTolerance',1e-8,'FunctionTolerance',1e-8,'FiniteDifferenceStepSize',1e-5); [] keeps the toolbox defaults
+params.useParallel=true; % run the MultiStart local solves on a parallel pool (Parallel Computing Toolbox); falls back to serial if no pool is available
+params.polish=true; % Nelder-Mead polish of the MultiStart solution when the gradient test below says it is not stationary
+params.polish_gradient_tol=1e-2; % run the polish only if the scaled gradient at the sqp solution exceeds this value
+params.polish_budget=100; % Nelder-Mead evaluations per free parameter
 
 vars.num=5; % number of variables comprising the ODE model
 vars.label={'S','E','I','R','C'}; % list of symbols to refer to the variables included in the model

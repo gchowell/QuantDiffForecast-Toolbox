@@ -533,7 +533,10 @@ for i=tstart1:1:tend1  %rolling window analysis
         tiledlayout(1,1,'Padding', 'compact', 'TileSpacing', 'compact')
         nexttile(1)
 
-        if isempty(params.composite_name)==1
+        % params.composite_name is optional (many options files do not set it).
+        [compositeName, compositeLabel] = quantdiffCompositeName(params);
+
+        if isempty(compositeName)==1
 
             cad1=strcat('\it{estim}=',num2str(composite(end,1),3),' (95%CI:',num2str(composite(end,2),3),',',num2str(composite(end,3),3),')')
             hist(compositetemp)
@@ -542,14 +545,14 @@ for i=tstart1:1:tend1  %rolling window analysis
             title(cad1)
 
         else
-            cad1=strcat('\it{',params.composite_name,'}=',num2str(composite(end,1),3),' (95%CI:',num2str(composite(end,2),3),',',num2str(composite(end,3),3),')')
+            cad1=strcat('\it{',compositeName,'}=',num2str(composite(end,1),3),' (95%CI:',num2str(composite(end,2),3),',',num2str(composite(end,3),3),')')
             hist(compositetemp)
             ylabel('Frequency')
-            xlabel(params.composite_name)
+            xlabel(compositeName)
             title(cad1)
         end
 
-        legend(params.composite_name)
+        legend(compositeLabel)
 
         set(gca,'FontSize',GetAdjustedFontSize);
         set(gcf,'color','white')
@@ -901,7 +904,15 @@ disp('<=========================================================================
 disp('ODE Model:');
 disp(['  - Model Function: ', func2str(model.fc)]);
 disp(['  - Model Name: ', model.name]);
-disp(['  - Composite Parameter: ', params.composite_name]);
+% params.composite_name is optional: report the name, or say that the composite
+% quantity is unnamed or not configured.
+if isempty(params.composite)
+    disp('  - Composite Parameter: (none)');
+elseif isempty(quantdiffCompositeName(params))
+    disp('  - Composite Parameter: (unnamed)');
+else
+    disp(['  - Composite Parameter: ', quantdiffCompositeName(params)]);
+end
 disp('<============================================================================>');
 
 % Display Model Parameters

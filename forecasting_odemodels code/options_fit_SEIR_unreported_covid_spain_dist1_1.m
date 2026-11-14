@@ -2,7 +2,7 @@
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
 
-function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, params,vars,windowsize1,tstart1,tend1,printscreen1]=options_fit
+function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, params,vars,windowsize1,tstart1,tend1,printscreen1]=options_fit_SEIR_unreported_covid_spain_dist1_1
 
 % <============================================================================>
 % <=================== Declare global variables =======================================>
@@ -69,19 +69,32 @@ B=300; % number of bootstrap realizations to characterize parameter uncertainty
 % <==============================================================================>
 
 model.fc=@SEIR_unreported; % name of the model function
-model.name='SEIR covid model with underreporting';   % string indicating the name of the ODE model
+model.name='SEIR covid with underreporting';   % string indicating the name of the ODE model
 
 params.num=8; % number of model parameters
 params.label={'\beta_0','\beta_1','\alpha','q','\rho','\kappa','\gamma','N'};  % list of symbols to refer to the model parameters
 params.LB=[0.001 0 0.5 0 0 0 0 47332614]; % lower bound values of the parameter estimates
 params.UB=[4 2 1 5 1 2 2 47332614]; % upper bound values of the parameter estimates
 params.initial=[1.9 0.15 0.94 0.06 0.82 1/6 1/4 47332614]; % initial parameter values/guesses
+
 params.fixed=[0 0 0 0 0 1 1 1]; % Boolean vector to indicate any parameters that should remain fixed (1) to initial values indicated in params.initial. Otherwise the parameter is estimated (0).
 params.fixI0=1; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters (0).
 params.composite=@R0s_unreported;  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
 params.composite_name='R_0'; % Name of the composite parameter
-params.extra0='';
+params.extra0=''; % optional constants passed into the model function (empty if none)
 
+% <==============================================================================>
+% <========================== Optimizer settings (fit_model) ====================>
+% <==============================================================================>
+% All optional; see the header of fit_model.m. The optimizer searches only the
+% estimated parameters, each rescaled to [0,1] by its bounds.
+
+params.logscale=true; % search in log10 of positive-bounded parameters (recommended when an estimated parameter spans several orders of magnitude, e.g. K, N or alpha in methods 3-5)
+params.optimOptions=[]; % fmincon overrides, e.g. struct('StepTolerance',1e-8,'FunctionTolerance',1e-8,'FiniteDifferenceStepSize',1e-5); [] keeps the toolbox defaults
+params.useParallel=true; % run the MultiStart local solves on a parallel pool (Parallel Computing Toolbox); falls back to serial if no pool is available
+params.polish=true; % Nelder-Mead polish of the MultiStart solution when the gradient test below says it is not stationary
+params.polish_gradient_tol=1e-2; % run the polish only if the scaled gradient at the sqp solution exceeds this value
+params.polish_budget=100; % Nelder-Mead evaluations per free parameter
 
 vars.num=6; % number of variables comprising the ODE model
 vars.label={'S','E','I','U','R','C'}; % list of symbols to refer to the variables included in the model
@@ -99,4 +112,4 @@ tstart1=1; % time point for the start of rolling window analysis
 
 tend1=1;  %time point for the end of the rolling window analysis
 
-printscreen1=0;
+printscreen1=1;

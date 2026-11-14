@@ -262,13 +262,14 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
 
         for p = 1:num_estimated
             clr = colors_list{min(p, length(colors_list))};
+            isLogP = true;       % headline scale of this parameter: true = PII (log scale), false = range fraction
             SCI_vals = NaN(num_replicates, 1);
             count = 0;
             for r = 1:num_replicates
                 fname = result_file_path(output_Dir, r, windowsize1, model_name, true);
                 if isfile(fname)
-                    S = load(fname, 'SCI');
-                    SCI_vals(r) = S.SCI(1, estimated_indices(p));
+                    [SCI_vals(r), scaleP] = quantdiffReadPII(fname, estimated_indices(p));
+                    isLogP = scaleP == 1;
                     count = count + 1;
                 end
             end
@@ -288,10 +289,10 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
                 plot(1, med, 'o', 'Color', clr, 'MarkerSize', 8, ...
                     'MarkerFaceColor', clr, 'LineWidth', 2);
             end
-            if ub > 1
+            if isLogP && ub > 1      % PII = 1: the interval spans one decade (log scale only)
                 yline(1, 'k--', 'LineWidth', 1.2);
             end
-            ylabel(sprintf('PII (%s)', latex_label(params_label{estimated_indices(p)})), ...
+            ylabel(sprintf('%s (%s)', pii_axis_name(isLogP), latex_label(params_label{estimated_indices(p)})), ...
                 'Interpreter', 'latex', 'FontSize', fs_ylabel);
             if p == 1
                 title(sprintf('%s, %s', model_display, error_type), ...
@@ -310,6 +311,7 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
 
         for p = 1:num_estimated
             clr = colors_list{min(p, length(colors_list))};
+            isLogP = true;       % headline scale of this parameter: true = PII (log scale), false = range fraction
             SCIss = NaN(num_replicates, num_ws);
             for w = 1:num_ws
                 ws = windowsize1(w);
@@ -317,8 +319,8 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
                 for r = 1:num_replicates
                     fname = result_file_path(output_Dir, r, ws, model_name, true);
                     if isfile(fname)
-                        S = load(fname, 'SCI');
-                        SCIss(r, w) = S.SCI(1, estimated_indices(p));
+                        [SCIss(r, w), scaleP] = quantdiffReadPII(fname, estimated_indices(p));
+                        isLogP = scaleP == 1;
                         count = count + 1;
                     end
                 end
@@ -342,12 +344,12 @@ function plot_PII_figure(output_Dir, error_type, model_name, model_display, ...
             hold on;
             plot(windowsize1, lb_vals, 'k--', 'LineWidth', 1.5);
             plot(windowsize1, ub_vals, 'k--', 'LineWidth', 1.5, 'HandleVisibility', 'off');
-            if any(ub_vals > 1)
+            if isLogP && any(ub_vals > 1)   % PII = 1: the interval spans one decade (log scale only)
                 yline(1, 'k--', 'LineWidth', 1.2, 'HandleVisibility', 'off');
             end
             xlim([windowsize1(1) windowsize1(end)]);
             xticks(windowsize1);
-            ylabel(sprintf('PII (%s)', latex_label(params_label{estimated_indices(p)})), ...
+            ylabel(sprintf('%s (%s)', pii_axis_name(isLogP), latex_label(params_label{estimated_indices(p)})), ...
                 'Interpreter', 'latex', 'FontSize', fs_ylabel);
             if p == 1
                 title(sprintf('%s, %s', model_display, error_type), ...
@@ -596,5 +598,16 @@ function v = default_or(value1, default1)
             error('noise_factor must be a scalar for this dist1 (got %s).', mat2str(value1));
         end
         v = value1;
+    end
+end
+
+function name = pii_axis_name(isLog)
+% Axis label of the identifiability measure shown for a parameter: the PII
+% (log10 width of the 95% interval) when its lower bound is positive, otherwise
+% the interval width as a fraction of the optimizer range (see quantdiffPII).
+    if isLog
+        name = 'PII';
+    else
+        name = 'CI width / range';
     end
 end

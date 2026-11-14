@@ -304,10 +304,13 @@ if ~isempty(params.composite)
 
     composite=[median(composite1) quantile(composite1,0.025) quantile(composite1,0.975)];
 
-    cad1=strcat('\it{',params.composite_name,'}=',num2str(composite(end,1),4),' (95%CI:',num2str(composite(end,2),4),',',num2str(composite(end,3),4),')');
+    % params.composite_name is optional (many options files do not set it).
+    [~, compositeLabel] = quantdiffCompositeName(params);
+
+    cad1=strcat('\it{',compositeLabel,'}=',num2str(composite(end,1),4),' (95%CI:',num2str(composite(end,2),4),',',num2str(composite(end,3),4),')');
     histogram(composite1)
     ylabel('Frequency')
-    xlabel(params.composite_name)
+    xlabel(compositeLabel)
     title(cad1)
 
     set(gca,'FontSize',GetAdjustedFontSize);

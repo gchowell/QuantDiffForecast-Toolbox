@@ -283,10 +283,26 @@ else
 
 end
 
-% PII_box = log10(UB/LB) of the optimizer box for each parameter (max attainable PII);
-% PII_ratio = SCI./PII_box (~1 => the bootstrap CI is the box, PII censored; NaN => pinned).
+% Identifiability measures of each window (all computed by quantdiffPII):
+%   SCI           PII = log10(UB/LB) of the bootstrap 95% interval; NaN when the lower
+%                 quantile is <= 0 (never Inf or complex)
+%   PII_rangeFrac interval width as a fraction of the optimizer range, in [0,1];
+%                 defined for every estimated parameter, also at zero
+%   PII_scale     headline measure: 1 = SCI (lower bound > 0), 0 = PII_rangeFrac
+%                 (lower bound <= 0); params.PIIscale overrides it per parameter
+%   PII_box       log10(UB/LB) of the optimizer box (max attainable PII); NaN when LB <= 0
+%   PII_ratio     ~1 => the interval is the box (censored): SCI./PII_box on the log
+%                 scale, PII_rangeFrac otherwise; NaN => pinned
+SCI=nan(size(SCI));
 PII_box  =nan(size(SCI));
 PII_ratio=nan(size(SCI));
+PII_rangeFrac=nan(size(SCI));
+PII_scale=nan(size(SCI));
+piiScaleUser=nan(1,size(SCI,2));           % optional params.PIIscale: 1 log, 0 range fraction, NaN automatic
+if isfield(params,'PIIscale') && ~isempty(params.PIIscale)
+    nPIIuser=min(numel(params.PIIscale),size(SCI,2));
+    piiScaleUser(1:nPIIuser)=params.PIIscale(1:nPIIuser);
+end
 
 % Bound-hitting fractions (bound-censoring diagnostic complementing PII_ratio):
 % share of bootstrap draws within boundHitTol (relative, 0.1%) of LB and of UB,
@@ -393,7 +409,7 @@ for i=tstart1:1:tend1  %rolling window analysis
     % Optimizer box used for the point fit on the real data (same box the bootstrap refits use,
     % except the data-dependent X0 upper bound). Pinned entries (LB==UB) give PII_box=0 -> ratio NaN.
     LBbox = fitDiagnostics_model1d.LB;  UBbox = fitDiagnostics_model1d.UB;
-    PII_box(cc1,:) = log10(UBbox(1:size(SCI,2))) - log10(LBbox(1:size(SCI,2)));
+    % PII_box of this window is set by quantdiffPII below (NaN when a lower bound is <= 0).
 
     % Sample size for AICc and the residual variance: the fixed first point of
     % each series (params.fixI0 = 1) is not counted (quantdiffEffectiveN).
@@ -537,15 +553,19 @@ for i=tstart1:1:tend1  %rolling window analysis
         % Fit model1 to bootstrap data
         %data1=[timevect1 f_model1_sim];
 
-        data1=[timevect1 reshape(f_model1_sim,length(t_window),length(vars.fit_index))];
+        % The replicate has its own variable: data1 keeps the OBSERVED calibration
+        % data (it is returned by this function and saved with the results). The
+        % time column is the raw index, as in the fit to the observed data
+        % (fit_model applies DT itself).
+        data1_boot=[data(t_window,1) reshape(f_model1_sim,length(t_window),length(vars.fit_index))];
 
-        data1(1,2:1+length(vars.fit_index))=I0;
+        data1_boot(1,2:1+length(vars.fit_index))=I0;
 
 
         %params0=initialParams(data1(:,2),flag1);
         params0=P_model1d;
 
-        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2,fitDiagnostics_model1]=fit_model(data1,params0,1,DT,model,params,vars,forecastingperiod);
+        [P_model1,residual_model1, fitcurve_model1, forecastcurve_model1, timevect2,initialguess,fval, F1,F2,fitDiagnostics_model1]=fit_model(data1_boot,params0,1,DT,model,params,vars,forecastingperiod);
         numericalAudit.bootstrapFits{cc1,j} = fitDiagnostics_model1;
 
         fit_model1=[fit_model1 fitcurve_model1];
@@ -575,7 +595,9 @@ for i=tstart1:1:tend1  %rolling window analysis
 
     end %end bootstrapping loop
 
-    data1=[timevect1 data1(:,2:end)];
+    % Observed calibration data with the time column scaled by DT (as before);
+    % formerly the data columns held the last bootstrap replicate.
+    data1=[timevect1 datac];
 
     datalatest=data(i:end,1:end);
 
@@ -918,7 +940,6 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,j)=std(Phatss_model1(:,j))/sqrt(M);
                 
-        SCI(cc1,j)=log10(param_estims(j,3,cc1))-log10((param_estims(j,2,cc1)));
 
     end
 
@@ -928,7 +949,6 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,params.num+j)=std(Phatss_model1(:,params.num+j))/sqrt(M); %X0
 
-        SCI(cc1,params.num+j)=log10(param_estims(params.num+j,3,cc1))-log10((param_estims(params.num+j,2,cc1)));
 
     end
 
@@ -953,19 +973,19 @@ for i=tstart1:1:tend1  %rolling window analysis
     if method1==3 | method1==4
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
 
-        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1))-log10((param_estims(params.num+j+1,2,cc1)));
 
     elseif method1==5
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
         MCEs(cc1,params.num+j+2)=std(Phatss_model1(:,params.num+j+2))/sqrt(M); %d
 
-        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1))-log10((param_estims(params.num+j+1,2,cc1)));
 
-        SCI(cc1,params.num+j+2)=log10(param_estims(params.num+j+2,3,cc1))-log10((param_estims(params.num+j+2,2,cc1)));
     end
 
     % fraction of the box width (log10 scale) still occupied by the bootstrap 95% CI
-    PII_ratio(cc1,:) = SCI(cc1,:) ./ PII_box(cc1,:);
+    nPII=size(SCI,2);
+    [SCI(cc1,:), PII_rangeFrac(cc1,:), PII_scale(cc1,:), PII_box(cc1,:), PII_ratio(cc1,:)] = quantdiffPII( ...
+        reshape(param_estims(1:nPII,2,cc1),1,[]), reshape(param_estims(1:nPII,3,cc1),1,[]), ...
+        LBbox(1:nPII), UBbox(1:nPII), piiScaleUser);
 
     % fraction of bootstrap draws within boundHitTol (relative) of LB / UB of their own box
     [fracLB(cc1,:), fracUB(cc1,:)] = boundHitFractions(Phatss_model1(:,1:size(SCI,2)), ...
@@ -1168,7 +1188,7 @@ end
 fileName = sprintf('results_%s%s.mat', window_file_token, replicate_file_token);
 fullFilePath = fullfile(outputDir, fileName);
 
-save(fullFilePath, 'paramss', 'param_bootmedian', 'estimOutsideCI', 'performanceC', 'SCI', 'PII_box', 'PII_ratio', 'fracLB', 'fracUB', 'boundHitTol', 'LBbox', 'UBbox', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', 'MCSE_LB', 'MCSE_UB', 'MCSE_PII', 'B2', '-mat');
+save(fullFilePath, 'paramss', 'param_bootmedian', 'estimOutsideCI', 'performanceC', 'SCI', 'PII_box', 'PII_ratio', 'PII_rangeFrac', 'PII_scale', 'fracLB', 'fracUB', 'boundHitTol', 'LBbox', 'UBbox', 'forecast_outputs', 'performanceC_all', 'performanceF_all', 'numericalAudit', 'MCSE_LB', 'MCSE_UB', 'MCSE_PII', 'B2', '-mat');
 
 % Print bootstrap counts only; do not change fitting or retained results.
 requestedBootstrap = M * numel(numericalAudit.originalFits);
