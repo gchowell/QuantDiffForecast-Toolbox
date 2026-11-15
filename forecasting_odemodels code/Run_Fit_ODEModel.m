@@ -321,8 +321,12 @@ cc1=1;
 % ensemble functions rebuild from the options file. The noise model actually
 % used by the bootstrap of each window is dist1_boot (it differs from dist1 only
 % when a window falls back to Poisson noise) and is recorded in noiseLog:
-% one row per window, [tstart dist1 dist1_boot factor1 d rawEstimate].
+% one row per window, [tstart dist1 dist1_boot factor1 d rawEstimate negativeShare].
+% negativeShare is the expected share of bootstrap draws below zero for normal
+% and Laplace noise (NaN for the other noise models); a warning is issued when
+% it exceeds negNoiseTol (see quantdiffNegativeNoiseShare).
 noiseLog=[];
+negNoiseTol=0.05;
 
 for i=tstart1:1:tend1  %rolling window analysis
 
@@ -483,7 +487,23 @@ for i=tstart1:1:tend1  %rolling window analysis
     if isempty(dist1_boot)
         dist1_boot=dist1;
     end
-    noiseLog=[noiseLog;[i dist1 dist1_boot factor1 d noiseRaw]];
+
+    % Normal and Laplace bootstrap noise use one scale for the whole series, so
+    % where the fitted counts are small a large part of the draws is negative.
+    % The draws are not truncated (that would bias the refits); warn instead.
+    [negShare, negInfo]=quantdiffNegativeNoiseShare(fitcurve_model1d,factor1,dist1_boot,length(vars.fit_index));
+    if negShare>negNoiseTol
+        if dist1_boot==0, noiseName='normal'; scaleName='SD'; else, noiseName='Laplace'; scaleName='scale'; end
+        warning('QuantDiffForecast:negativeNoise', ...
+            ['Window %d: about %.0f%% of the %s bootstrap draws will be negative (noise %s %.3g; ' ...
+             'fitted values as low as %.3g; up to %.0f%% at the lowest point). A constant-scale noise ' ...
+             'model fits these data poorly at low counts, so the bootstrap intervals may be unreliable ' ...
+             'there. For counts consider dist1 = 2 with method1 = 0 (negative binomial noise scaled by ' ...
+             'the mean) or a count likelihood (method1 = 1, 3, 4 or 5). The draws are not truncated.'], ...
+            i, 100*negShare, noiseName, scaleName, factor1, negInfo.minMean, 100*negInfo.worstPoint);
+    end
+
+    noiseLog=[noiseLog;[i dist1 dist1_boot factor1 d noiseRaw negShare]];
 
 
     % <===========================================================================================>
