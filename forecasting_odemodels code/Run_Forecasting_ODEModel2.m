@@ -415,7 +415,14 @@ for i=tstart1:1:tend1  %rolling window analysis
     % each series (params.fixI0 = 1) is not counted (quantdiffEffectiveN).
     nEff=quantdiffEffectiveN(length(ydata),length(vars.fit_index),params.fixI0);
 
-    [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,nEff)
+    % Count likelihoods: complete the objective to a full log-likelihood of the
+    % informative observations (adds sum(log(y!)), removes the fixed first points),
+    % so AICc is on the same footing as for least squares and SAD. Zero for
+    % methods 0 and 6; fval itself is not changed (quantdiffAICcCountAdjustment).
+    fvalAdjustAICc=quantdiffAICcCountAdjustment(method1,ydata,length(vars.fit_index),params.fixI0, ...
+        P_model1d(params.num+length(vars.fit_index)+1),P_model1d(params.num+length(vars.fit_index)+2));
+
+    [AICc,part1,part2,numparams]=getAICc(method1,dist1,sum(params.fixed==0),length(vars.fit_index).*(params.fixI0==0),fval,nEff,fvalAdjustAICc)
 
     AICcs=[AICcs;[i AICc part1 part2 numparams]];
 

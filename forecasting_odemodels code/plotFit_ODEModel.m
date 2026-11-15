@@ -473,7 +473,6 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,j)=std(Phatss_model1(:,j))/sqrt(M);
 
-        SCI(cc1,j)=log10(param_estims(j,3,cc1))-log10(param_estims(j,2,cc1));
 
     end
 
@@ -483,7 +482,6 @@ for i=tstart1:1:tend1  %rolling window analysis
 
         MCEs(cc1,params.num+j)=std(Phatss_model1(:,params.num+j))/sqrt(M); %X0
 
-        SCI(cc1,params.num+j)=log10(param_estims(params.num+j,3,cc1))-log10(param_estims(params.num+j,2,cc1));
 
     end
 
@@ -496,18 +494,27 @@ for i=tstart1:1:tend1  %rolling window analysis
     outsideCI = (P_model1d(:)' < quantile(Phatss_model1,0.025,1)) | (P_model1d(:)' > quantile(Phatss_model1,0.975,1));
     estimOutsideCI(cc1,1:numel(outsideCI)) = outsideCI;
 
+    % PII of this window, by the same rule as the runners (quantdiffPII): NaN where
+    % the lower quantile is <= 0, never Inf or complex. The optimizer bounds come
+    % from the saved workspace loaded above; they only feed the helper's other
+    % outputs, so result files from older runs (no saved bounds) work as well.
+    nPII=size(SCI,2);
+    if exist('LBbox','var') && exist('UBbox','var') && numel(LBbox)>=nPII && numel(UBbox)>=nPII
+        lbPII=LBbox(1:nPII); ubPII=UBbox(1:nPII);
+    else
+        lbPII=nan(1,nPII); ubPII=nan(1,nPII);
+    end
+    SCI(cc1,:)=quantdiffPII(reshape(param_estims(1:nPII,2,cc1),1,[]), reshape(param_estims(1:nPII,3,cc1),1,[]), lbPII, ubPII);
+
     if method1==3 | method1==4
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
 
-        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1))-log10(param_estims(params.num+j+1,2,cc1));
 
     elseif method1==5
         MCEs(cc1,params.num+j+1)=std(Phatss_model1(:,params.num+j+1))/sqrt(M); %alpha
         MCEs(cc1,params.num+j+2)=std(Phatss_model1(:,params.num+j+2))/sqrt(M); %d
 
-        SCI(cc1,params.num+j+1)=log10(param_estims(params.num+j+1,3,cc1))-log10(param_estims(params.num+j+1,2,cc1));
 
-        SCI(cc1,params.num+j+2)=log10(param_estims(params.num+j+2,3,cc1))-log10(param_estims(params.num+j+2,2,cc1));
     end
 
 
@@ -750,7 +757,15 @@ end
 
 fileName = strcat('parameters-ODEModel-',cadfilename1,'-model_name-',model.name,'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(tstart1),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-forecastingperiod-0.mat');
 fullFilePath = fullfile(outputDir, fileName);
-save(fullFilePath, 'param_estims', 'param_bootmedian', 'estimOutsideCI', '-mat');
+% Update the three variables this function recomputes and keep everything else the
+% runner saved in this file (PII_box, PII_ratio, PII_rangeFrac, PII_scale, fracLB,
+% fracUB, the Monte Carlo errors, numericalAudit): -append replaces only the named
+% variables. Formerly the file was rewritten with these three alone.
+if isfile(fullFilePath)
+    save(fullFilePath, 'param_estims', 'param_bootmedian', 'estimOutsideCI', '-append');
+else
+    save(fullFilePath, 'param_estims', 'param_bootmedian', 'estimOutsideCI', '-mat');
+end
 
 
 % <=============================================================================================>
@@ -792,6 +807,11 @@ writetable(T, fullFilePath);
 % <=============================================================================================>
 % <================= Save csv file with spans of CIs (SCI) from rolling window analysis ========>
 % <=============================================================================================>
+
+% Rows loaded from result files written before November 2026 can still hold Inf or
+% complex PII values: report them as NaN, as the current runners do.
+SCI(~isfinite(SCI) | imag(SCI)~=0)=NaN;
+SCI=real(SCI);
 
 rollparams=[(tstart1:1:tend1)' SCI(:,1:end)];
 T = array2table(rollparams);

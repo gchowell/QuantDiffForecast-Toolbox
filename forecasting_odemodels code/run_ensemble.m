@@ -13,10 +13,11 @@ function R = run_ensemble(optionsHandles, modelNames, weight_type1, calibrationp
 %   (2) computes the weights with ensembleWeights (equal, Akaike, inverse-WIS or
 %       softmax-WIS; the better model always gets the larger weight);
 %   (3) pools the models' predictive draws with the exact empirical linear pool
-%       getensemble_linearpool_from_curves, requesting its trajectory sample
-%       curvesEns so the ensemble is scored from DRAWS (computeforecastperformance,
-%       computeWIS), exactly like each member; the pool's first output Qens is
-%       pointwise quantiles and is used for plotting and the Forecast CSV only;
+%       getensemble_linearpool_from_curves and scores the ensemble from the pool's
+%       EXACT quantiles (computeScoresFromQuantiles), so its scores carry no
+%       sampling noise and do not depend on 'Seed'. Members and baselines are
+%       scored through the same function from the exact quantiles of their own
+%       draws. The pool's trajectory sample curvesEns only draws the figure;
 %   (4) writes the ensemble Forecast / performance CSVs to <toolbox>/output and
 %       returns everything in R.
 %
@@ -33,8 +34,10 @@ function R = run_ensemble(optionsHandles, modelNames, weight_type1, calibrationp
 %                         rolling window (the runner writes one file per window), so
 %                         'tstart' selects that window and 'tend' must equal the tend1 the
 %                         models were run with (defaults 1, 1)
-%     'Nens'              number of pooled trajectories (default: M of the members)
-%     'Seed'              seed of the pool's local random stream (default 1)
+%     'Nens'              number of pooled trajectories drawn for the figure, and of
+%                         baseline draws (default: M of the members)
+%     'Seed'              seed of the trajectory sample and of the baselines (default 1);
+%                         the ensemble's and the members' scores do not depend on it
 %     'Plot'              true/false (default true)
 %     'FitIndex'          which fitted variable's file to read (default 1)
 %
@@ -143,10 +146,17 @@ for w = 1:nW
     [weights1, winfo] = ensembleWeights(weight_type1, AICc, WISC);
     R.weights(w, :) = weights1; R.rule = winfo.rule;
 
-    % Exact linear pool. Qens = pointwise quantiles [median LB UB] for plotting and
-    % the CSV; curvesEns = trajectories sampled from the mixture, used for SCORING.
+    % Exact linear pool. Qens = the pool's exact quantiles at the 23 levels the scores
+    % need (the weighted quantiles of ALL members' draws); forecast1 = [median LB UB]
+    % for the CSV. The ensemble is SCORED from Qens (computeScoresFromQuantiles), so
+    % its scores do not depend on the seed. curvesEns, a sample of trajectories from
+    % the pool, is used only to draw the figure. (Formerly the ensemble was scored on
+    % curvesEns, which added sampling noise of about 1% of the WIS with 6000 draws
+    % per member and about 5% with 400.)
+    levelsQ = [0.01 0.025 0.05:0.05:0.95 0.975 0.99];
     NensW = Nens; if isempty(NensW), NensW = size(curves{1}, 2); end
-    [~, forecast1, ~, ~, curvesEns] = getensemble_linearpool_from_curves(weights1, curves{:}, 'Nens', NensW, 'Seed', seed);
+    [Qens, forecast1, ~, ~, curvesEns] = getensemble_linearpool_from_curves(weights1, curves{:}, ...
+        'ProbsOut', levelsQ, 'Nens', NensW, 'Seed', seed);
 
     data1 = S{1}.data1(:, [1 fitIdx+1]); datalatest = S{1}.datalatest(:, [1 fitIdx+1]);   % [time, fitted variable fitIdx]
     for k = 2:K
@@ -154,11 +164,26 @@ for w = 1:nW
             error('run_ensemble:data', 'Model %d (%s) was fitted to different data than model 1; members must share the observed series.', k, modelNames{k});
         end
     end
-    [~, MSECS, MAECS, PICS, ~, ~, MSEFS, MAEFS, PIFS, ~] = computeforecastperformance(data1, datalatest, curvesEns, curvesEns, forecastingperiod1);
-    [WISC_e, WISFS_e] = computeWIS(data1, datalatest, curvesEns, forecastingperiod1);
-    R.performanceC_ens(w, :) = [MAECS(end) MSECS(end) PICS(end) WISC_e(end)];
-    if forecastingperiod1 > 0 && ~isempty(MAEFS)
-        R.performanceF_ens(w, :) = [MAEFS(end, end) MSEFS(end, end) PIFS(end, end) WISFS_e(end, end)];
+    nCalib = size(data1, 1);
+    [perfC_e, perfF_e] = computeScoresFromQuantiles(Qens, levelsQ, datalatest, nCalib, forecastingperiod1);
+    hasF = ~isempty(perfF_e);                         % false when the observations do not cover the full horizon
+    R.performanceC_ens(w, :) = perfC_e;               % [MAE MSE Coverage WIS]
+    if hasF
+        R.performanceF_ens(w, :) = perfF_e(end, 2:5);
+    end
+
+    % Members scored through the same path (the exact quantiles of their own draws),
+    % so ensemble and members are compared on the same footing. These values replace
+    % the ones read from the members' files above; they agree with them up to the
+    % quantile convention (the runners interpolate between draws). The weights are
+    % still computed from the members' saved AICc / calibration WIS.
+    for k = 1:K
+        Qk = getensemble_linearpool_from_curves(1, curves{k}, 'ProbsOut', levelsQ);
+        [perfC_k, perfF_k] = computeScoresFromQuantiles(Qk, levelsQ, datalatest, nCalib, forecastingperiod1);
+        R.performanceC_models(w, :, k) = perfC_k;
+        if ~isempty(perfF_k)
+            R.performanceF_models(w, :, k) = perfF_k(end, 2:5);
+        end
     end
 
     % --- outputs for this window ---
@@ -180,7 +205,7 @@ for w = 1:nW
         'VariableNames', [{'Calibrationperiod', 'MAE', 'MSE', 'Coverage 95%PI', 'WIS'} strcat('w_', matlab.lang.makeUniqueStrings(matlab.lang.makeValidName(cellstr(modelNames))))]);
     writetable(Tc, fullfile(outputDir, strcat('performance-calibration', suffix)));
 
-    if forecastingperiod1 > 0 && ~isempty(MAEFS)
+    if hasF
         % Parameter-free baselines scored on the same targets with the same number
         % of draws: the forecast-hub flat baseline and a log-linear trend baseline
         % (see baselineForecast). Relative WIS = WIS / WIS_baseline; < 1 beats it.
@@ -190,12 +215,13 @@ for w = 1:nW
         calib = datalatest(1:size(data1, 1), 1:2);
         WISb = struct('flat', [], 'trend', []);
         for bt = {'flat', 'trend'}
-            bdraws = baselineForecast(calib, forecastingperiod1, bt{1}, size(curvesEns, 2), seed);
-            [~, WISFS_b] = computeWIS(data1, datalatest, bdraws, forecastingperiod1);
-            WISb.(bt{1}) = WISFS_b(:, 2);
+            bdraws = baselineForecast(calib, forecastingperiod1, bt{1}, NensW, seed);
+            Qb = getensemble_linearpool_from_curves(1, bdraws, 'ProbsOut', levelsQ);
+            [~, perfF_b] = computeScoresFromQuantiles(Qb, levelsQ, datalatest, nCalib, forecastingperiod1);
+            WISb.(bt{1}) = perfF_b(:, 5);
         end
         R.WIS_baselines(w, :) = [WISb.flat(end) WISb.trend(end)];
-        R.relWIS_ens(w, :) = WISFS_e(end, 2) ./ R.WIS_baselines(w, :);
+        R.relWIS_ens(w, :) = perfF_e(end, 5) ./ R.WIS_baselines(w, :);
         for k = 1:K
             R.relWIS_models(w, k, :) = R.performanceF_models(w, 4, k) ./ R.WIS_baselines(w, :);
         end
@@ -203,8 +229,8 @@ for w = 1:nW
         % Same layout as the members' performance-forecasting file: one row per
         % horizon h, each metric averaged over horizons 1..h (as computeforecast-
         % performance / computeWIS define them), plus the baseline and relative WIS.
-        perfF = [MAEFS(:, 1) MAEFS(:, 2) MSEFS(:, 2) PIFS(:, 2) WISFS_e(:, 2) ...
-                 WISb.flat WISb.trend WISFS_e(:, 2) ./ WISb.flat WISFS_e(:, 2) ./ WISb.trend];
+        perfF = [perfF_e ...
+                 WISb.flat WISb.trend perfF_e(:, 5) ./ WISb.flat perfF_e(:, 5) ./ WISb.trend];
         R.performanceF_ens_byhorizon{w} = perfF;
         Tfp = array2table(perfF, 'VariableNames', {'Horizon', 'MAE', 'MSE', 'Coverage 95%PI', 'WIS', ...
             'WIS_baseline_flat', 'WIS_baseline_trend', 'relWIS_flat', 'relWIS_trend'});
@@ -225,7 +251,7 @@ for w = 1:nW
 
     fprintf('Window %d: weights [%s] (%s); ensemble calibration WIS %.3g vs members [%s]\n', windowsize1, ...
         num2str(weights1, '%.3f '), winfo.rule, R.performanceC_ens(w, 4), num2str(WISC, '%.3g '));
-    if forecastingperiod1 > 0 && ~isempty(MAEFS)
+    if hasF
         fprintf('           horizon %d relative WIS vs flat / trend baseline: ensemble %.2f / %.2f; members [%s] / [%s]\n', ...
             forecastingperiod1, R.relWIS_ens(w, 1), R.relWIS_ens(w, 2), ...
             num2str(squeeze(R.relWIS_models(w, :, 1)), '%.2f '), num2str(squeeze(R.relWIS_models(w, :, 2)), '%.2f '));

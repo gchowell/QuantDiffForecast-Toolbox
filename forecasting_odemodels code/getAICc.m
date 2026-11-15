@@ -1,4 +1,14 @@
-function [AICc,part1,part2,numparams]=getAICc(method1,dist1,params_num,fixI0,fval,n)
+function [AICc,part1,part2,numparams]=getAICc(method1,dist1,params_num,fixI0,fval,n,fvalAdjust)
+% Optional 7th input fvalAdjust (count likelihoods, method1 = 1, 3, 4, 5): amount
+% added to fval so that fval + fvalAdjust is the complete negative log-likelihood
+% of the n observations, including the sum(log(y!)) term the fitting objective
+% leaves out (see quantdiffAICcCountAdjustment). It makes the AICc of these methods
+% comparable with methods 0 and 6, whose formulas below are complete likelihoods.
+% Omitted or empty -> 0, the former behaviour. Ignored for methods 0 and 6.
+
+if nargin < 7 || isempty(fvalAdjust)
+    fvalAdjust = 0;
+end
   
 numparams=params_num;
     
@@ -54,9 +64,9 @@ switch method1
 
     otherwise
         
-        AICc=-2*(-fval) + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
+        AICc=-2*(-(fval+fvalAdjust)) + 2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
         
-        part1=-2*(-fval);
+        part1=-2*(-(fval+fvalAdjust));
         
         part2=2*numparams + (2*numparams*(numparams+1))/(n-numparams-1);
 
