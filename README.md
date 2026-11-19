@@ -1,113 +1,76 @@
 # QuantDiffForecast
 
-### Parameter estimation, forecasting, and uncertainty quantification for ODE models in MATLAB
+QuantDiffForecast is a MATLAB toolbox for fitting ordinary differential equation (ODE) models to one or more observed time series, quantifying parameter uncertainty, and evaluating short-term forecasts. The bundled example fits a susceptible–exposed–infectious–recovered (SEIR) model to the 1918 San Francisco influenza series. The same workflow accepts a user-defined ODE and an observation rule for each measured series.
 
-**QuantDiffForecast** connects ordinary differential equation (ODE) models with observed time-series data. It provides a workflow for estimating model parameters, quantifying uncertainty with parametric bootstrapping, and generating short-term forecasts. Users can fit one or multiple observed series, examine results across calibration windows, and adapt the workflow to their own dynamical models.
-
-The repository includes an SEIR example using the 1918 influenza time series from San Francisco, together with fitting, forecasting, and visualization functions.
-
-**[Published tutorial](https://doi.org/10.1002/sim.10036)** · **[Video tutorial](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)** · **[Quick start](#quick-start)** · **[Profile likelihood](#profile-likelihood)** · **[Practical identifiability](#practical-identifiability-simulations)** · **[Configuration](#configuration)** · **[Outputs](#outputs)** · **[Citation](#citation)**
-
-## What the toolbox provides
-
-- **Model calibration:** constrained parameter estimation using nonlinear least squares, Poisson or negative-binomial likelihoods, and multiple optimization starting points.
-- **Uncertainty quantification:** point estimates from the fit to the observed data, bootstrap parameter distributions, percentile confidence intervals, and predictive simulations with observation noise.
-- **Parameter identifiability:** profile-likelihood curves and approximate confidence intervals; see [Profile likelihood](#profile-likelihood). For simulation-based studies, see [Practical identifiability simulations](#practical-identifiability-simulations).
-- **Forecast evaluation:** calibration and held-out forecast summaries, including absolute and squared error, prediction-interval coverage, and weighted interval score (WIS).
-- **Flexible workflows:** user-defined ODEs, selected fixed parameters, multiple observed series, derived quantities such as the basic reproduction number, and rolling calibration windows.
-
-Start with the example below, then see [Using your own data](#using-your-own-data) and [Adding a model](#adding-a-model). 
+[Quick start](#quick-start) · [Using your own data](#using-your-own-data) · [Configuration](#configuration) · [Forecast evaluation](#rolling-windows-and-forecast-horizons) · [Profile likelihood](#profile-likelihood) · [Parameter recovery](#practical-identifiability-simulations) · [Outputs](#outputs) · [Published tutorial](https://doi.org/10.1002/sim.10036) · [Video tutorial](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)
 
 ## Requirements and installation
 
-### MATLAB source workflow
+The source workflow uses MATLAB with **Optimization Toolbox** (`fmincon`), **Global Optimization Toolbox** (`MultiStart`) and **Statistics and Machine Learning Toolbox** (sampling, distributions and profile thresholds). **Parallel Computing Toolbox** is optional. The fitting functions can parallelize local solves, and the parameter-recovery script can parallelize independent replicates.
 
-The fitting and bootstrap workflow uses the following MATLAB products:
-
-| Product | Used for |
-| --- | --- |
-| MATLAB | ODE integration, data handling, tables, and graphics. |
-| [Optimization Toolbox](https://www.mathworks.com/help/optim/ug/fmincon.html) | Constrained optimization with `fmincon`. |
-| [Global Optimization Toolbox](https://www.mathworks.com/help/gads/multistart.html) | `MultiStart` and optimization start-point management. |
-| [Statistics and Machine Learning Toolbox](https://www.mathworks.com/help/stats/index.html) | Random sampling for the observation models, including `poissrnd`, `nbinrnd`, and `normrnd`. |
-| [Parallel Computing Toolbox](https://www.mathworks.com/help/parallel-computing/index.html) (optional) | Parallel `MultiStart` local solves in the fitting functions when `params.useParallel = true`, and parallel replicates in `plotPracticalIdentifiabilityResults`. |
-
-Parallel Computing Toolbox is optional and is used in two places. First, the fitting functions (`Run_Fit_ODEModel`, `Run_Forecasting_ODEModel`, `Run_ProfileLikelihood_ODEModel`, and the plotting functions that refit) can run the `MultiStart` local solves of every fit, including each bootstrap refit, on a parallel pool. This is controlled by `params.useParallel` in the options file: when it is `true`, `fit_model` starts or reuses the current pool (`gcp`) and runs `MultiStart` with `'UseParallel', true`; when it is `false` or absent, everything runs serially. If the toolbox is not installed or no pool can be started, `fit_model` issues the warning `fit_model:parallel` once, falls back to serial execution for the rest of the session, and produces the same results more slowly. The shipped quick-start fitting file sets `params.useParallel = true`, so expect a pool to start on the first run. Second, `plotPracticalIdentifiabilityResults` runs its simulation replicates in a `parfor` loop when the toolbox is installed and licensed and falls back to a serial loop otherwise. No minimum MATLAB release for the source workflow is specified here.
-
-Clone the repository in a terminal:
+Download and extract the repository ZIP or clone it in a terminal.
 
 ```bash
 git clone https://github.com/gchowell/QuantDiffForecast-Toolbox.git
 ```
 
-Alternatively, use **Code → Download ZIP** on GitHub and extract the archive.
-
-In MATLAB, set **Current Folder** to the repository root—the folder containing this README—then run:
+In MATLAB, set **Current Folder** to the repository root, then run the following. The code folder name contains a space. The runners create `output/` as needed.
 
 ```matlab
 codeDir = fullfile(pwd, 'forecasting_odemodels code');
 assert(isfolder(codeDir), 'Set Current Folder to the repository root first.');
 addpath(codeDir);
 cd(codeDir);
-
-% Inspect the installed products and locate key dependencies.
-ver
-which fmincon
-which MultiStart
-which nbinrnd
 ```
 
-Run the examples from `forecasting_odemodels code`. The main fitting and forecasting functions create their `output` folder when needed. Keep only the intended version of the toolbox on your MATLAB path.
-
-### Standalone applications
-
-The separate [standalone folder](stand%20alone%20executable/) contains deployment files. Its [deployment instructions](stand%20alone%20executable/readme.txt) specify MATLAB Runtime **R2023b** for the Windows executable. Those instructions concern the compiled application, not a compatibility guarantee for the current MATLAB source. Do not assume a packaged executable contains every subsequent source-code update.
+For the compiled Windows application, the deployment instructions specify MATLAB Runtime **R2023b**. The current MATLAB source and the packaged application have separate release histories. [Standalone applications](stand%20alone%20executable/) · [Deployment instructions](stand%20alone%20executable/readme.txt)
 
 ## Quick start
 
-### Fit an SEIR model and forecast the next 10 observations
+### Fit the first 17 observations and forecast the next 10
 
-The data file [`curve-flu1918SF.txt`](forecasting_odemodels%20code/input/curve-flu1918SF.txt) is already included. This example uses the matching **negative-binomial likelihood family** in the following options files: `method1 = 3`, `dist1 = 3`.
-
-| Task | Options file |
-| --- | --- |
-| Parameter estimation | [`options_fit_SEIR_flu1918_dist1_3.m`](forecasting_odemodels%20code/options_fit_SEIR_flu1918_dist1_3.m) |
-| Forecasting | [`options_forecast_SEIR_flu1918_dist1_3.m`](forecasting_odemodels%20code/options_forecast_SEIR_flu1918_dist1_3.m) |
-
-This example estimates β and negative-binomial dispersion while holding κ, γ, and N fixed; uncertainty is conditional on those fixed values.
+This example uses the bundled 1918 influenza data. It estimates the transmission rate β and negative-binomial dispersion α. The transition rate κ, recovery rate γ, population size N and the initial value of the observed state are fixed. State 5 accumulates transitions from exposed to infectious, and its increments are fitted to the observed counts. [Example data](forecasting_odemodels%20code/input/curve-flu1918SF.txt) · [SEIR equations](forecasting_odemodels%20code/SEIR1.m)
 
 ```matlab
 fitOptions = @options_fit_SEIR_flu1918_dist1_3;
 forecastOptions = @options_forecast_SEIR_flu1918_dist1_3;
 
-% Fit rows 1:17, then inspect the fitted model and parameter summaries.
 rng(1, 'twister');
 Run_Fit_ODEModel(fitOptions, 1, 1, 17);
 plotFit_ODEModel(fitOptions, 1, 1, 17);
 
-% Calibrate and generate a 10-step-ahead forecast from the same data window.
 rng(1, 'twister');
 Run_Forecasting_ODEModel(forecastOptions, 1, 1, 17, 10);
+```
+
+The two `1` arguments select a single window starting at row 1. Rows 1–17 are the calibration data and rows 18–27 are the ten forecast targets. You can run the forecast independently. The forecast runner fits the observed data, simulates and refits 300 bootstrap datasets, then generates 20 predictive draws per refit. The 6,000 draws represent uncertainty in both the parameters and the observations.
+
+Read the runner’s trajectory CSV before calling the plotter to retain both medians. For this example, the first and last held-out counts are 124 and 1,104, with input time labels 17 and 26. Each of the ten displayed rows contains one observed target and its prediction.
+
+```matlab
+file = ['Forecast-model_name-SEIR model-fit_index-5-fixI0-1-method-3-dist-3-' ...
+        'tstart-1-tend-1-calibrationperiod-17-horizon-10-1918 Flu-cases.csv'];
+trajectory = readtable(fullfile('output', file));
+disp(trajectory(18:27, {'time','data','median','LB','UB','model_median'}));
+
 plotForecast_ODEModel(forecastOptions, 1, 1, 17, 10);
 ```
 
-The forecasting function **performs its own calibration and bootstrap**; it does not simply extend the preceding fit. A separate fitting run is optional. Keep the options and numeric arguments unchanged when calling the corresponding plotting function, because they identify the saved results.
+Here `median` includes observation noise and `model_median` summarizes the refitted model trajectories before observation noise is added. The plotter reads the saved MAT files and rewrites the trajectory CSV with five columns (`time`, `data`, `median`, `LB`, `UB`). Use matching options and window arguments in the runner and plotter.
 
-For this daily example, 10 steps correspond to 10 days. Other data frequencies require model rates expressed in the corresponding time unit. The two options files use the same likelihood family but have different starting values, bounds, and optimization budgets; inspect them before a controlled comparison.
+### Default settings
 
-To explore model trajectories before fitting, run this separately:
+| Entry point or options choice | Fit criterion | Bootstrap datasets per window | Calibration observations | Forecast steps |
+| --- | --- | ---: | ---: | ---: |
+| Fit runner without arguments, using [options_fit.m](forecasting_odemodels%20code/options_fit.m) | Poisson likelihood | 300 | 17 | 0 |
+| Forecast runner without arguments, using [options_forecast.m](forecasting_odemodels%20code/options_forecast.m) | Negative-binomial likelihood, method 3 | 100 | 17 | 10 |
+| Named [fit](forecasting_odemodels%20code/options_fit_SEIR_flu1918_dist1_3.m) and [forecast](forecasting_odemodels%20code/options_forecast_SEIR_flu1918_dist1_3.m) options used above | Negative-binomial likelihood, method 3 | 300 each | 17 | 0 for fit, 10 for forecast |
 
-```matlab
-plotODEModel(@options_fit_SEIR_flu1918_dist1_3);
-```
+Both named examples use `numstartpoints = 10`, `params.fixI0 = 1` and `params.useParallel = true`. They use different starting values and lower bounds for β. For a serial run, set `params.useParallel = false` in a copy of the options file. For a shorter installation check, reduce `B` in the copy. To inspect trajectories at the supplied parameter values and across the parameter bounds before fitting, run `plotODEModel(fitOptions)`.
 
-Both quick-start options files request `B = 300` bootstrap datasets. For a preliminary installation check, reduce `B` in a **copy** of the options file, then increase it and check stability before reporting uncertainty estimates. A smaller bootstrap is a workflow check, not evidence of interval accuracy.
+## Profile likelihood
 
-The fitting options file sets `params.useParallel = true`, so the first call starts a parallel pool (this can take a few seconds and prints the usual pool start-up message). Without the Parallel Computing Toolbox the run continues serially after a single `fit_model:parallel` warning. To keep a run serial, set `params.useParallel = false` in your copy of the options file; the same optimization problem is solved from the same start points, only the wall-clock time changes. The random draws (start points and bootstrap noise) are generated on the client in both modes, so `rng` seeding controls them either way.
-
-### Profile likelihood
-
-Use [`Run_ProfileLikelihood_ODEModel.m`](forecasting_odemodels%20code/Run_ProfileLikelihood_ODEModel.m) to assess practical identifiability by fixing one parameter at a time and reoptimizing the remaining estimated quantities (Raue et al., 2009). The function performs its own fit; no preceding bootstrap run is required.
+Use [`Run_ProfileLikelihood_ODEModel.m`](forecasting_odemodels%20code/Run_ProfileLikelihood_ODEModel.m) to assess practical identifiability by fixing one parameter at a time and reoptimizing the remaining estimated quantities (Raue et al., 2009). The function performs its own reference fit.
 
 From `forecasting_odemodels code`, profile the transmission rate β (`paramIndex = 1`) using observations 1–17 of the SEIR example:
 
@@ -133,67 +96,56 @@ Reference: Raue A, Kreutz C, Maiwald T, et al. Structural and practical identifi
 
 ## Practical identifiability simulations
 
-Use [`Run_PracticalIdentifiability_ODEModel.m`](forecasting_odemodels%20code/Run_PracticalIdentifiability_ODEModel.m) for simulation-based parameter-recovery studies. It generates synthetic data from `params.initial` under the selected observation model, then fits and bootstraps each replicate. The summary statistic is the **parameter identifiability index (PII)**, `log10(UB/LB)` of each parameter's 95% bootstrap interval: values near zero indicate a tight interval, values above one an interval spanning more than an order of magnitude. Tracking the PII across replicates and calibration-window lengths shows how much data a parameter needs to become practically identifiable. Results describe parameter recovery under the chosen simulation assumptions.
+Profile likelihood examines one observed dataset. A parameter-recovery study instead simulates many datasets with known parameter values and asks how well the fitting procedure recovers them. Use the study to examine bias, interval coverage and interval width as the calibration window grows.
 
-Three files implement the study:
-
-| File | Role |
-| --- | --- |
-| [`Run_simulate_ODEModel.m`](forecasting_odemodels%20code/Run_simulate_ODEModel.m) | Solves the model at `params.initial` over `windowsize1 + max(30, forecastingperiod)` time steps and adds observation noise of type `dist1` to every fitted state. Returns the noise-free trajectories and the noisy series. |
-| [`Run_PracticalIdentifiability_ODEModel.m`](forecasting_odemodels%20code/Run_PracticalIdentifiability_ODEModel.m) | For each replicate: seeds the random stream with the replicate number, simulates a series, writes it to `input/<cadfilename1>-windowsize-<W>-replicate-<r>.txt`, and fits it with `Run_Forecasting_ODEModel2`, which saves `results_W<W>_rep<r>.mat`. |
-| [`plotPracticalIdentifiabilityResults.m`](forecasting_odemodels%20code/plotPracticalIdentifiabilityResults.m) | A script. Runs the replicates still missing for every window size (in parallel when the Parallel Computing Toolbox is available), then plots the PII distribution and a confidence-interval grid against the true values. |
-
-The study is configured by a **forecast-type** options file (`options_forecast_*`, the kind used by `Run_Forecasting_ODEModel`) in which `params.initial` holds the true values, `params.fixed` marks which parameters are estimated, and `method1`/`dist1` select the observation model used both to simulate and to fit. The repository ships one such file, [`options_forecast_PII_EXPO_r_dist1_3.m`](forecasting_odemodels%20code/options_forecast_PII_EXPO_r_dist1_3.m) (exponential growth, `r` estimated, negative-binomial noise). To study another model, copy it, rename the file and the function declared on its first line, and set `model.name` to `'<DISPLAY>-PII-<scenario>-dist1-<k>'`; the text before `-PII` labels the figures and the scenario is part of the output folder name, so two studies of the same model with different `params.fixed` masks should use different scenarios.
-
-### Running the study
-
-The simplest route is the script. From `forecasting_odemodels code`, open `plotPracticalIdentifiabilityResults.m`, edit the USER SETTINGS block, and run it by name:
-
-```matlab
-% USER SETTINGS inside plotPracticalIdentifiabilityResults.m
-options_handle = @options_forecast_PII_EXPO_r_dist1_3;
-error_type     = 'Negbin5';     % 'Poisson' | 'Negbin5' | 'Negbin10' (sets the noise factor)
-windowsize1    = 30:10:50;      % scalar -> boxplot; vector -> PII vs window length
-num_replicates = 20;
-run_flag       = true;          % true: compute missing replicates, then plot; false: plot only
-plot_type      = 'both';        % 'PII' | 'CI_grid' | 'both' | 'none'
-```
+From the code folder, run the study script. To change the study, edit the **USER SETTINGS** block inside the script. It clears the workspace when it starts. [Study script](forecasting_odemodels%20code/plotPracticalIdentifiabilityResults.m)
 
 ```matlab
 plotPracticalIdentifiabilityResults
 ```
 
-Results and figures go to `output/<DISPLAY>_<error_type>_W<windows>/`. Replicates whose results file already exists are skipped, so re-running after increasing `num_replicates` only computes the new ones. `error_type` must match the options file: `'Poisson'` requires `method1 = 1`, and the `Negbin` labels require `method1` in 2–5. For a first run reduce `B` to about 20 in a copy of the options file and use `num_replicates = 2`.
+| Script setting | Shipped value | Meaning |
+| --- | --- | --- |
+| `options_handle` | `@options_forecast_PII_EXPO_r_dist1_3` | Exponential growth with true rate `r = 0.18`, negative-binomial noise and 300 bootstrap refits per simulated series. |
+| `noise_factor` | `5` | True dispersion α for method 3, giving variance $\mu+5\mu$. The script derives the noise label from the options and this value. |
+| `windowsize1` | `30:10:50` | Compare 30, 40 and 50 calibration observations. |
+| `num_replicates` | `20` | Simulated datasets per window length. The replicate number seeds the random stream across window lengths. |
+| `run_flag`, `use_parallel` | `true`, `true` | Run missing replicates and use parallel workers when available. Set `run_flag = false` to summarize existing results. |
+| `plot_type` | `'both'` | Produce interval-width plots and a grid of parameter intervals. Other choices are `'PII'`, `'CI_grid'` and `'none'`. |
 
-The computation can also be driven directly:
+The default study writes to **`output/EXP_Negbin3-alpha5_W30-10-50/`**. Open `recovery_summary.csv` first. Each row describes one estimated parameter at one window length. The table reports generating truth, files found, eligible replicates (`converged`), bias and RMSE of the observed-data estimate, bias of the bootstrap median, empirical 95% coverage and its Monte Carlo standard error, interval widths and bound hits. Interpret coverage using its replicate count. For example, with 20 eligible replicates each missed interval changes coverage by five percentage points. [Recovery summary](forecasting_odemodels%20code/summarizeIdentifiability.m)
 
-```matlab
-Run_PracticalIdentifiability_ODEModel( ...
-    @options_forecast_PII_EXPO_r_dist1_3, 30, 5, 20);
-```
-
-Here, `30` is the calibration-window length, `5` is the noise factor, and `20` is the number of simulated datasets. The options file's `B` controls bootstrap datasets per replicate. For this example's `dist1 = 3` the noise factor is the negative-binomial dispersion α (variance `mu + 5*mu`); its meaning follows `dist1`: the standard deviation for `dist1 = 0`, the variance-to-mean ratio for `dist1 = 2`, α for `dist1 = 3`–`5`, and the Laplace scale for `dist1 = 6`; it is ignored for Poisson noise. When omitted or `[]`, `Run_simulate_ODEModel` uses 4, 3, 3, 0.1, 3 and 20 for `dist1` = 0, 2, 3, 4, 5 and 6 respectively.
-
-Called this way, results are written to `output/` itself, not to the script's analysis folder. To plot them with the script afterwards, pass that folder as the last argument and then run the script with `run_flag = false`:
-
-```matlab
-outDir = fullfile(pwd, 'output', 'EXP_Negbin5_W30-10-50');   % the folder the script derives from its settings
-for W = 30:10:50
-    Run_PracticalIdentifiability_ODEModel(@options_forecast_PII_EXPO_r_dist1_3, W, 5, 20, [], outDir);
-end
-```
-
-A single noisy series can be simulated without fitting:
+To simulate a dataset without fitting, or fit selected replicates directly, use a **forecast-type** options function. The first call below returns noise-free state trajectories, noisy observations and the generating noise settings. The second fits two simulated datasets, writing their results to the specified folder.
 
 ```matlab
-[Ys, curves] = Run_simulate_ODEModel(@options_forecast_PII_EXPO_r_dist1_3, 30);
+studyOptions = @options_forecast_PII_EXPO_r_dist1_3;
+rng(1, 'twister');
+[Ys, curves, noiseTruth] = Run_simulate_ODEModel(studyOptions, 30, 5);
+
+outDir = fullfile(pwd, 'output', 'EXP_Negbin3-alpha5_W30');
+Run_PracticalIdentifiability_ODEModel(studyOptions, 30, 5, 2, [], outDir);
 ```
 
-Interpret the PII together with the bound diagnostics saved in the same results files (`PII_box`, `PII_ratio`, `fracLB`, `fracUB`): an interval that is narrow only because both bootstrap quantiles sit on the optimizer bounds is not evidence of identifiability.
+For power-law negative-binomial variance $\mu+\alpha\mu^d$, use the bundled method-5 study and pass `noise_factor = [alpha d]`, for example `[0.5 1.5]`. A scalar sets $d=1$. An empty value uses the method-5 simulator default `[0.5 1.5]`. [Method-3 options](forecasting_odemodels%20code/options_forecast_PII_EXPO_r_dist1_3.m) · [Method-5 options](forecasting_odemodels%20code/options_forecast_PII_EXPO_r_dist1_5.m) · [Simulator](forecasting_odemodels%20code/Run_simulate_ODEModel.m)
+
+The study reuses result files with matching window and replicate numbers. When changing the generating parameters, bounds, or bootstrap settings, use a distinct results folder and input base name (`cadfilename1`). Each simulated input has a companion `-noise.mat` file. The summary excludes replicates with a documented unconverged point fit. For Poisson and likelihood-based negative-binomial studies, it also excludes replicates with mismatched recorded noise settings. Older files without noise records can still enter the summary with a warning.
+
+### Reading interval width and bound hits
+
+Let $L,U$ be the 2.5th and 97.5th percentiles of the bootstrap estimates, and $L_b,U_b$ the optimizer bounds. The toolbox reports the following measures. [Index definitions](forecasting_odemodels%20code/quantdiffPII.m) · [Reader for current and older results](forecasting_odemodels%20code/quantdiffReadPII.m)
+
+| Measure | Calculation and interpretation |
+| --- | --- |
+| Log-scale parameter identifiability index (PII), saved as `SCI` | $\log_{10}(U/L)$ when both endpoints are positive. A value of 1 means the interval spans a factor of ten. A nonpositive endpoint gives `NaN`. This is the default summary when the optimizer lower bound is positive. |
+| `PII_rangeFrac` | $(U-L)/(U_b-L_b)$, clipped to [0, 1]. This is the default summary when the optimizer lower bound is zero or negative. A value of 0.8 means the interval occupies 80% of the allowed range. |
+| `PII_box`, `PII_ratio` | For positive bounds, `PII_box` is $\log_{10}(U_b/L_b)$. On the log scale, `PII_ratio` divides the interval PII by that span. On the range-fraction scale, `PII_ratio` equals `PII_rangeFrac`. A ratio near 1 means the interval occupies nearly the whole allowed range on the selected scale. |
+| `fracLB`, `fracUB` | Fractions of bootstrap estimates at the lower and upper optimizer bounds, using a tolerance of 0.1% of each bound’s absolute value. A zero bound requires an exact hit. The recovery summary's `frac_bound_hits` gives the fraction of replicates for which `fracLB + fracUB > 0.05`. |
+
+In `recovery_summary.csv`, read `median_PII` when `PII_scale = 1` and `median_rangeFrac` when `PII_scale = 0`. The column `n_PII_undefined` counts replicates without a defined log-scale width. To override the automatic choice for individual parameters, set `params.PIIscale` to `1` (log), `0` (range fraction) or `NaN` (automatic) in parameter-slot order. Fixed slots have no search width. Read a narrow interval alongside the bound-hit fractions and empirical coverage. For example, many refits at the lower bound can produce a narrow interval even when recovery of the true value is poor.
 
 ## Example visualizations
 
-These are existing repository illustrations, not reference outputs newly generated from the quick-start commands. Exact results depend on the configuration, random draws, and software version.
+These repository illustrations show the types of figures the toolbox produces. Exact results depend on the configuration, random draws and software version.
 
 <table>
   <tr>
@@ -243,7 +195,7 @@ Place a numeric, header-free text file in [`forecasting_odemodels code/input`](f
 
 The first column is the **time index**. Every remaining column is an observed series to be fitted. Use consecutive, unit-spaced indices such as `0, 1, 2, ...`; the main runners use `DT = 1`. Keep a separate mapping to calendar dates when needed. Prepare missing or irregularly spaced observations upstream rather than passing `NaN`, `Inf`, or irregular intervals to the fitting workflow.
 
-For Poisson and negative-binomial observation models, supply nonnegative integer counts. Continuous measurements require an appropriate observation model rather than being treated as counts.
+For Poisson and negative-binomial likelihoods, supply nonnegative integer counts. The runners reject negative observations in the calibration rows and report the affected rows and series. Resolve revisions and missing intervals before fitting. Use a continuous observation model for continuous measurements.
 
 ### Match observations to model states
 
@@ -263,9 +215,9 @@ vars.fit_diff = [0, 1];
 
 These vectors must have the same length as the number of observed columns, in the same order. Do not add unused covariate columns to the input file.
 
-**Levels and increments are different observables.** With `fit_diff = 0`, the state itself is matched to the data. With `fit_diff = 1`, the current [observation mapping](forecasting_odemodels%20code/quantdiffObservationCurve.m) uses `abs([C(1); diff(C)])`: successive state increments, with the initial state prepended. It is not a continuous-time derivative and does not divide by a time increment. Check that a cumulative state is nondecreasing and that its initial-value convention matches your first observation.
+With `fit_diff = 0`, the model observation is the state value. With `fit_diff = 1`, it is `abs([C(1); diff(C)])`, the initial state followed by absolute interval increments. For incidence, use a nondecreasing cumulative state and check that its initial value represents the first observation. [Observation mapping](forecasting_odemodels%20code/quantdiffObservationCurve.m)
 
-The main fitting and forecasting runners **do not convert an input series simply because its filename begins with `cumulative-`**. Supply the intended observable explicitly and select the corresponding state transformation.
+The runners take the observed columns as supplied. For a cumulative input series, provide cumulative observations with a level mapping, or convert the data to incidence before using an increment mapping.
 
 ## Configuration
 
@@ -300,11 +252,11 @@ The main runners infer `params.num` and `vars.num` from their label vectors. Kee
 
 ### Optimizer settings (optional)
 
-These `params` fields are read by `fit_model` and may be omitted; the defaults below then apply. The shipped `dist1_1` and `dist1_3` example files set all of them explicitly. See the header of `fit_model.m` for details.
+The following defaults apply when the fields are omitted. The named quick-start files set them explicitly. [Optimizer](forecasting_odemodels%20code/fit_model.m)
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `params.useParallel` | `false` | `true` runs the `MultiStart` local solves of every fit, including the bootstrap refits, on a parallel pool (Parallel Computing Toolbox). The pool is started with `gcp` if none is open. If no pool can be started, `fit_model` warns once (`fit_model:parallel`) and continues serially for the rest of the session. The same problem is solved from the same start points in both modes; only the wall-clock time changes. |
+| `params.useParallel` | `false` | `true` runs the `MultiStart` local solves of every fit, including the bootstrap refits, on a parallel pool (Parallel Computing Toolbox). The pool is started with `gcp` if none is open. If no pool can be started, `fit_model` warns once (`fit_model:parallel`) and continues serially for the rest of the session. |
 | `params.logscale` | `false` | `true` makes the optimizer work in `log10` of every estimated coordinate whose lower bound is positive. Recommended when estimated parameters span several orders of magnitude (for example `N`, `K`, or `alpha` in methods 3–5). Bounds, starting values, and all outputs stay in the original units. |
 | `params.optimOptions` | `[]` | Structure of `fmincon` option overrides applied on top of the toolbox defaults, for example `struct('StepTolerance', 1e-8, 'FunctionTolerance', 1e-8)`. |
 | `params.polish` | `false` | `true` adds a derivative-free Nelder–Mead polish of the `MultiStart` solution and keeps it if it lowers the objective. |
@@ -324,65 +276,70 @@ Let `mu` denote the model-predicted observation, `alpha` the fitted negative-bin
 | `3` | `3` | Negative-binomial negative log-likelihood | Variance `mu + alpha * mu` |
 | `4` | `4` | Negative-binomial negative log-likelihood | Variance `mu + alpha * mu^2` |
 | `5` | `5` | Negative-binomial negative log-likelihood | Variance `mu + alpha * mu^d` |
-| `6` | `6` | Sum of absolute deviations | Laplace; the exported AICc uses the absolute-deviation objective and is not conventional Laplace AICc. |
+| `6` | `6` | Sum of absolute deviations | Laplace noise with scale estimated from absolute residuals. AICc uses the maximized Laplace likelihood. |
 
-**Changing `dist1` with `method1 = 0` does not change the objective into weighted least squares or maximum likelihood.** It changes the observation-noise model used after least-squares fitting. Also, `dist1 = 2` is not an instruction to use `method1 = 2`; that objective is not supported by the current helper.
+For least squares, all three `dist1` choices minimize the same sum of squared residuals. Code 2 selects negative-binomial *bootstrap noise* with `method1 = 0`. The runners reject `method1 = 2`. For `dist1 = 2`, Pearson residuals determine the variance-to-mean factor after fitting. If the estimate is unavailable or at most one, that window uses Poisson noise and the filename retains `dist-2`. For Laplace bootstrap noise, the usual scale estimate divides the sum of absolute residuals by $n_{\rm used}-p/2$, where $p$ counts the fitted curve parameters, including free initial values. [Pearson dispersion](forecasting_odemodels%20code/estimatePearsonDispersion.m) · [Laplace scale](forecasting_odemodels%20code/estimateLaplaceScale.m)
 
+**Check the noise assumption at low counts.** Gaussian and Laplace draws can fall below zero. For each calibration window the runners calculate the expected fraction of negative bootstrap draws across the noisy observations, excluding the first point of each series. A fraction above 5% triggers `QuantDiffForecast:negativeNoise`. The draws retain their sampled values. The main runners save the diagnostic in the bootstrap MAT file. The columns of `noiseLog`, in order, are window-start row, requested distribution, distribution used, scale or dispersion, variance exponent, raw estimate and expected negative fraction. [Negative-draw calculation](forecasting_odemodels%20code/quantdiffNegativeNoiseShare.m)
+
+### Comparing fits with AICc
+
+For $s$ fitted series of length $W$, the effective sample size is $s(W-1)$ with `params.fixI0 = 1`. The first observation of each series sets its initial value. With free fitted initial values, $n_{\rm eff}=sW$ and those initial values count toward $k$, the number of estimated quantities. The runners require $n_{\rm eff}\ge k+2$. In the 17-observation negative-binomial example, $n_{\rm eff}=16$ and $k=2$ (β and α).
+
+Least squares counts one Gaussian residual variance regardless of `dist1`. Method 6 uses the Laplace likelihood and counts its scale parameter. For Poisson and negative-binomial fits, the AICc calculation restores the data-dependent log-factorial term and excludes the contribution of each pinned first observation. Compare models on the same observed response, rows, and initial-state treatment, using the same code revision. The two exported AICc components sum to the total. For Gaussian and Laplace fits, the second component includes likelihood constants as well as the penalty. [AICc](forecasting_odemodels%20code/getAICc.m) · [Effective sample size](forecasting_odemodels%20code/quantdiffEffectiveN.m) · [Count-likelihood adjustment](forecasting_odemodels%20code/quantdiffAICcCountAdjustment.m)
 
 ## Rolling windows and forecast horizons
 
-For a window starting at row `i`, the calibration rows are `i : i + windowsize1 - 1`. The forecast origin is the **last calibration observation**. With the quick-start arguments, rows 1–17 are fitted and rows 18–27 are the held-out targets when available.
-
-The native rolling interface accepts different start and end indices. However, **some current CSV filenames are reused within a multi-window call**, so later windows can overwrite earlier CSV exports. Per-window MAT snapshots are saved separately. For distinct CSV results at three origins, run and plot each window separately:
+The following call fits three overlapping 17-observation windows and forecasts ten steps from each origin.
 
 ```matlab
-forecastOptions = @options_forecast_SEIR_flu1918_dist1_3;
-
-for firstRow = 1:3
-    rng(1000 + firstRow, 'twister');
-    Run_Forecasting_ODEModel(forecastOptions, firstRow, firstRow, 17, 10);
-    plotForecast_ODEModel(forecastOptions, firstRow, firstRow, 17, 10);
-end
+opts = @options_forecast_SEIR_flu1918_dist1_3;
+rng(1, 'twister');
+Run_Forecasting_ODEModel(opts, 1, 3, 17, 10);
+plotForecast_ODEModel(opts, 1, 3, 17, 10);
 ```
 
-Forecast-performance rows labeled horizon `h` summarize steps **1 through h**, not only the observation at lead `h`. Evaluating the full forecast requires observed targets through `i + windowsize1 + forecastingperiod - 1`; the current scoring helpers skip forecast evaluation when the requested full horizon is unavailable.
+The first window fits rows 1–17 and forecasts rows 18–27. The third fits rows 3–19 and forecasts rows 20–29. For evaluation, the dataset must extend through `tend1 + windowsize1 - 1 + forecastingperiod`. The runner shortens `tend1` with a warning if only some requested starts fit, and stops if none fit. Use the effective end index when plotting. For projection beyond the available observations, set `getperformance = 0` in a forecast options file. Forecast scores need a complete observed horizon. For time labels beyond the data, use the saved `timevect2` grid.
 
-For a forecast beyond the available data, future observations are naturally unknown. The current CSV export can also leave their **time** entries as `NaN`; use the saved `timevect2` grid to identify those future targets.
+The forecasting performance CSV has one row for each horizon $h$. **The scores summarize steps 1 through $h$ together.** MAE and MSE use the median across predictive draws, which include observation noise. The nominal 95% prediction interval coverage is a percentage, and WIS is the weighted interval score across the predictive intervals. The runner clips exported medians and limits at zero. With Gaussian or Laplace noise, a negative raw median can therefore differ from the exported value used for display. Forecast and performance exports identify the individual start row. The `StateVars-*.csv` filename uses the same start and end indices for the whole run and can be reused by successive windows. Run one start at a time if a separate state CSV is needed for every origin. [Scoring functions](forecasting_odemodels%20code/computeforecastperformance.m) · [WIS](forecasting_odemodels%20code/computeWIS.m)
+
+### Baselines and forecast ensembles
+
+For a single-model benchmark, `baselineForecast` uses only the calibration observations. Its `'flat'` baseline centers forecasts on the last observation and samples changes from the calibration data. Its `'trend'` baseline extrapolates a log-linear trend fitted to the last seven observations by default (fewer for shorter series). For example, the following computes the flat baseline WIS for the same ten targets as the quick start.
+
+```matlab
+data = load(fullfile('input', 'curve-flu1918SF.txt'));
+calib = data(1:17, :);
+draws = baselineForecast(calib, 10, 'flat', 6000, 1);
+[~, baselineWIS] = computeWIS(calib, data, draws, 10);
+disp(baselineWIS(end, :))  % horizon, then mean WIS over steps 1 through 10
+```
+
+The optional ensemble function reads saved member forecasts for the same observed series, window and horizon. It supports equal weights (`-1`), Akaike weights from AICc (`0` or `1`), inverse calibration WIS (`2`) and softmax calibration WIS (`3`). It scores the pooled predictive quantiles and reports WIS relative to both baselines. A ratio below one indicates lower WIS than the corresponding baseline. **The ensemble requires `getensemble_linearpool_from_curves` on the MATLAB path. This helper is absent from the current repository.** The single-model and baseline examples above use bundled functions. [Baseline implementation](forecasting_odemodels%20code/baselineForecast.m) · [Ensemble interface](forecasting_odemodels%20code/run_ensemble.m) · [Weights](forecasting_odemodels%20code/ensembleWeights.m)
 
 ## Outputs
 
-Results are written under `forecasting_odemodels code/output`. Filenames encode combinations of the model, estimation method, error distribution, initial-condition setting, calibration window, fitted state, and horizon. Not every export encodes every setting, so preserve outputs before changing a run's configuration.
+Results are written to `forecasting_odemodels code/output/`. For a single forecast, start with the trajectory and forecasting-performance CSVs. For parameter inference, read the observed-data estimates, bootstrap intervals and optimizer diagnostics together.
 
-| File or prefix | Contents and interpretation |
+| File or prefix | Contents |
 | --- | --- |
-| `parameters-rollingwindow-*.csv` | Point estimates (the fit to the observed data) and 2.5th/97.5th percentiles of the bootstrap refits. Before November 2026 the point estimate was the bootstrap median; the medians are still saved as `param_bootmedian` in `parameters-ODEModel-*.mat`. |
-| `parameters-composite-*.csv` | Corresponding summaries for a derived quantity, when configured: `composite best fit` is the quantity evaluated at the best-fit parameters (this column was labelled `composite mean` before November 2026); the bounds are 2.5th/97.5th percentiles across bootstrap refits. |
-| `MCSEs-rollingwindow-*.csv` | `std(bootstrap draws)/sqrt(B)` summaries; these are not parameter confidence intervals or Monte Carlo errors of the median. |
-| `SCIs-rollingwindow-*.csv` | Legacy log interval-ratio diagnostics. |
-| `AICc-*.csv` | Columns `time`, `AICc`, `AICc part1`, `AICc part2`, and `numparams`; no separate AIC or BIC columns are produced here. |
-| `Forecast-model_name-*.csv` | Columns `time`, `data`, `median`, `LB`, and `UB`; the bounds are 2.5th/97.5th predictive percentiles. May include both calibration and forecast periods. |
-| `performance-calibration-*.csv` | Columns `time`, `calibration_period`, `MAE`, `MSE`, `Coverage 95%PI`, and `WIS`. |
-| `performance-forecasting-*.csv` | Columns `forecasting_horizon`, `MAE`, `MSE`, `Coverage 95%PI`, and `WIS`. Coverage is expressed as a percentage. |
-| `quantile-*.csv` | Quantile tables exported by the plotting functions, using 23 probability levels from 0.01 to 0.99. |
-| `StateVars-*.csv` | State-trajectory medians and 2.5th/97.5th percentiles across bootstrap fits. |
-| `*-histogram-rollingwindow-*.csv` | Parameter histogram bins and counts, when generated. |
-| `bootstraps-ODEModel-*.mat` | Bootstrap parameter draws, objective values, and `numericalAudit`. |
-| `parameters-ODEModel-*.mat` | Parameter summary array `param_estims` (best fit, 95% CI), plus `param_bootmedian` (bootstrap medians) and `estimOutsideCI` (1 where the best fit lies outside its own 95% CI). Plotting rewrites this file without `numericalAudit`; retrieve the audit from `bootstraps-ODEModel-*.mat`. |
-| `Forecast-ODEModel-*.mat` | Saved per-window/per-series workspace, including forecast arrays, grids, and run variables used by the plotting functions. |
-| `results_W<W>_rep<r>.mat` | One file per (window size, replicate) of the practical identifiability study: `paramss` (best-fit estimate and 95% CI of every parameter), `param_bootmedian`, `estimOutsideCI`, `SCI` (log10 CI width, the PII), `PII_box`, `PII_ratio`, `fracLB`, `fracUB`, forecast arrays and performance summaries. Written by `Run_Forecasting_ODEModel2`. |
-| `<Model>_<error>_W…/PII_param.pdf`, `plot_box_param.pdf`, `CI_grid_param_<k>.pdf` | Figures of the practical identifiability study. |
+| `Forecast-model_name-*.csv` | Calibration and forecast rows. The runner exports `time`, `data`, `median`, `LB`, `UB` and `model_median`. The plotting functions rewrite the file with the first five columns. |
+| `performance-calibration-*.csv`, `performance-forecasting-*.csv` | MAE, MSE, 95% prediction interval coverage (%) and WIS. Calibration files include the start row and window length. Forecast files use `forecasting_horizon`. |
+| `quantile-*.csv`, `StateVars-*.csv` | Plotter exports contain 23 predictive quantiles (0.01 to 0.99). State files summarize bootstrap trajectories for the model states. |
+| `parameters-rollingwindow-*.csv`, `parameters-composite-*.csv` | Original-data point estimates and 2.5th/97.5th bootstrap percentiles. For a composite, the central value is the function evaluated at the observed-data estimate. |
+| `AICc-*.csv` | Window-start row, total AICc, two additive components, and the parameter count. |
+| `MCSEs-rollingwindow-*.csv` | Monte Carlo standard errors for each interval endpoint (`_MCSE_CI_LB`, `_MCSE_CI_UB`) and log-scale PII (`_MCSE_PII`), estimated by 500 resamples of the bootstrap draws. `_SE_bootmean` is the standard error of the bootstrap mean. `M_bootstrap` and `B2_resamples` record both sample sizes. |
+| `SCIs-rollingwindow-*.csv`, `PII*-rollingwindow-*.csv` | Log-scale interval span, optimizer-box span (`PIIbox`), normalized width (`PIIratio`), range fraction (`PIIrangeFrac`), selected scale (`PIIscale`), and lower and upper bound-hit fractions (`PIIfracLB`, `PIIfracUB`). |
+| `bootstraps-ODEModel-*.mat` | Per-window bootstrap estimates, objective values, optimizer bounds, `numericalAudit` and `noiseLog`. |
+| `parameters-ODEModel-*.mat` | `param_estims` (observed-data estimate and interval), `param_bootmedian`, `estimOutsideCI`, `numericalAudit`, PII diagnostics and interval Monte Carlo errors. Plotting appends summaries to the existing file and preserves the runner's diagnostic fields. |
+| `Forecast-ODEModel-*.mat` | Per-window, per-observed-series snapshot for plotting. `forecast_model1` holds the refitted trajectories. `forecast_model12` includes observation noise. `forecast1` and `forecast2` are the corresponding slices for the saved series. |
+| `results_W<W>_rep<r>.mat`, `recovery_summary.csv` | Per-replicate results and the recovery table for the [simulation study](#practical-identifiability-simulations). |
 
-In the main runners, `forecast_model1` contains trajectories propagated from bootstrap parameter fits; `forecast_model12` additionally includes sampled observation noise. Parameter confidence intervals and observation prediction intervals therefore answer different questions. These are **frequentist bootstrap draws, not posterior samples**. The MAT files should not be assumed to include the random-number-generator state automatically.
-
-The default performance CSVs report **MSE**, not RMSE or MAPE. Other metrics calculated internally are not necessarily exported in those tables.
-
-Inspect unresolved bootstrap counts and `numericalAudit` in `bootstraps-ODEModel-*.mat` before interpreting intervals; unresolved fits can remain in the summaries.
-
-Parameter histograms mark the best fit with a dashed red line. A best fit outside its own bootstrap 95% interval triggers the warning `QuantDiffForecast:estimateOutsideCI` and is recorded in `estimOutsideCI`; this usually means bootstrap bias, for example an estimate on a parameter bound or along a ridge, and the fit should be inspected before reporting.
+The runners print requested, accepted and unresolved bootstrap counts. Unresolved refits can still contribute to the reported percentiles. Review `numericalAudit` alongside the interval and bound-hit summaries, especially when the observed-data estimate falls outside its own bootstrap interval (`estimOutsideCI`). Record the random seed, options and source revision. Filenames can be reused when `B`, bounds or optimizer settings change.
 
 ## Adding a model
 
-Use [`SEIR1.m`](forecasting_odemodels%20code/SEIR1.m) as a compartmental-model example. The main solver calls an ODE function with **four inputs**: time, state vector, parameter vector, and `params.extra0`. Return a column vector with one derivative per state.
+Use [`SEIR1.m`](forecasting_odemodels%20code/SEIR1.m) as a compartmental-model example. The main solver calls an ODE function with **four inputs** in this order — time, state vector, parameter vector and `params.extra0`. Return a column vector with one derivative per state.
 
 The current solver enforces nonnegative states, and some forecast summaries clip negative bounds or quantiles to zero. Models with signed states or observations require corresponding changes to integration, scoring, and reporting.
 
@@ -422,24 +379,30 @@ This example treats `C` as an accumulating state and fits its increments. Retain
 Composite functions receive a matrix of parameter draws, with one draw per row. See [`R0s.m`](forecasting_odemodels%20code/R0s.m) for an example. Verify callback signatures and dependencies before using other bundled or contributed models.
 
 
-## Troubleshooting and support
+## Checks and support
+
+Run the shipped smoke tests from the code folder. The first suite covers observation models, profile likelihood and preservation of saved diagnostics. The second adds multiple observed series, rolling windows and parameter recovery. The third exercises recovery plots and more demanding examples.
+
+```matlab
+qdfSmokeTest([7 8])     % fast input checks for unsupported methods and negative counts
+qdfSmokeTest()          % all eight checks in the first suite
+qdfSmokeTest2()         % ten additional checks
+qdfSmokeTest3(1:3)      % recovery plots and the influenza profile examples
+```
+
+The fourth test in the third suite uses the Spain under-reporting example. Its options additionally require `curve-cases-covid-spain.txt`, `SEIR_unreported.m` and `R0s_unreported.m`, which are absent from the source distribution. [First suite](forecasting_odemodels%20code/qdfSmokeTest.m) · [Second suite](forecasting_odemodels%20code/qdfSmokeTest2.m) · [Third suite](forecasting_odemodels%20code/qdfSmokeTest3.m)
 
 | Symptom | What to check |
 | --- | --- |
-| MATLAB cannot find a runner or options function | Check Current Folder, `addpath`, and `which Run_Forecasting_ODEModel -all`. Remove conflicting toolbox copies from the path. |
-| `fmincon`, `MultiStart`, or a random-sampling function is unavailable | Verify the required MATLAB products are installed and licensed. |
-| Warning `fit_model:parallel` ("Parallel pool unavailable ... running MultiStart serially") | The options file sets `params.useParallel = true` but no pool could be started, usually because the Parallel Computing Toolbox is not installed or licensed. The run continues serially and the results are unchanged. Set `params.useParallel = false` to silence the warning, or run `parpool` manually to see the underlying error. |
-| A parallel pool starts unexpectedly on the first fit | `params.useParallel = true` in the options file (the shipped quick-start fitting file sets it). Set it to `false` for serial runs. |
-| A plotting function cannot find its MAT file | Run the matching fitting/forecasting function first and use the same options, method, window indices, and horizon. |
-| A custom ODE produces “Too many input arguments” | Its callback must accept all four inputs, even when the last input is unused. |
-| Data dimensions or values are rejected | Check the numeric input format, finite values, unit-spaced time grid, and one observation mapping per data column. |
-| An options filename and function declaration differ | When copying an options file, update the declared function name to match the new filename. |
-| `plotPracticalIdentifiabilityResults` reports "0 files" and draws empty axes | The results were written elsewhere. Run the script with `run_flag = true`, or pass the script's analysis folder as the last argument of `Run_PracticalIdentifiability_ODEModel`. The window list and `error_type` are part of the folder name. |
-| "Too many output arguments" when calling `Run_PracticalIdentifiability_ODEModel` or `Run_simulate_ODEModel` | These take a forecast-type options file (`options_forecast_*`, 15 outputs), not a fit-type file. `plotODEModel` takes the fit type. |
+| A runner, options function or MathWorks function cannot be found | Run `which Run_Forecasting_ODEModel -all` and `ver`. Confirm the code folder and the required MATLAB products. |
+| A plotter cannot load a MAT file | Match the options function, start and end rows, window length and horizon to a completed run. Use the effective end row if the runner shortened the range. |
+| An options function returns too few outputs | Fit and profile functions use fit-type options (13 outputs). The forecast, simulator and recovery runners use forecast-type options (15 outputs). |
+| A study resumes with unexpected results | Check the printed output folder, the simulated input base name and any noise-mismatch warnings. Existing window/replicate results are skipped. |
+| A custom ODE reports too many input arguments | Accept all four callback inputs, including the fourth argument when unused. |
 
-For reproducible bug reports, open a [GitHub issue](https://github.com/gchowell/QuantDiffForecast-Toolbox/issues) with the exact command, options file, MATLAB/toolbox versions, source revision, error message, and a minimal shareable dataset. Include relevant diagnostics, but do not upload confidential data.
+For a reproducible bug report, include the command, options file, source revision, MATLAB/toolbox versions, error message and a small shareable dataset. [GitHub Issues](https://github.com/gchowell/QuantDiffForecast-Toolbox/issues)
 
-For scientific questions, contact **Gerardo Chowell**, Georgia State University, at [gchowell@gsu.edu](mailto:gchowell@gsu.edu).
+For scientific questions, contact Gerardo Chowell at Georgia State University. [gchowell@gsu.edu](mailto:gchowell@gsu.edu)
 
 ## Citation
 
