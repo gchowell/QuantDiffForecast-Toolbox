@@ -427,6 +427,8 @@ Chowell G, Bleichrodt A, Luo R. **Parameter estimation and forecasting with quan
 
 Report the source revision and analysis configuration alongside the citation so that readers can identify the implementation used.
 
+Related methods include Chowell (2017) on fitting dynamic models with quantified uncertainty [Uncertainty primer](https://doi.org/10.1016/j.idm.2017.08.001) 
+
 ## License
 
 Distributed under **CC0 1.0 Universal**. See [LICENSE](LICENSE) for the full terms.
