@@ -313,6 +313,31 @@ The repository figures illustrate fits, forecast uncertainty and parameter estim
   </tr>
 </table>
 
+The next four figures compare forecasts across calibration lengths, observation models and baselines, and show a profile likelihood. To regenerate them, run `make_readme_figures` from the code folder. It runs five forecasts and one profile with the shipped options, caches the summaries in `output/readme_figures_cache.mat` and saves the PNG files to `docs/images/`. [Figure script](forecasting_odemodels%20code/make_readme_figures.m)
+
+<p align="center">
+  <img src="docs/images/forecast_by_calibration_length.png" alt="Ten-day SEIR forecasts from the first 14, 17 and 20 observations with 50% and 95% prediction intervals" width="100%"><br>
+  <sub>Ten-day forecasts from three calibration lengths (<a href="#rolling-windows-and-forecast-horizons">forecast evaluation</a>)</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/noise_model_comparison.png" alt="The same SEIR forecast under least squares with normal noise, Poisson likelihood and negative-binomial likelihood" width="100%"><br>
+  <sub>One model and dataset under three observation models (<a href="#estimation-methods-and-observation-models">methods</a>)</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="62%" align="center">
+      <img src="docs/images/baseline_comparison.png" alt="SEIR forecast compared with the flat and trend baselines, with weighted interval score by forecast horizon" width="100%"><br>
+      <sub>SEIR forecast and WIS against the flat and trend baselines (<a href="#baselines-and-forecast-ensembles">baselines</a>)</sub>
+    </td>
+    <td width="38%" align="center">
+      <img src="docs/images/profile_likelihood_beta.png" alt="Profile likelihood of the transmission rate with the 95% threshold and interval" width="100%"><br>
+      <sub>Profile likelihood of β (<a href="#profile-likelihood">profile likelihood</a>)</sub>
+    </td>
+  </tr>
+</table>
+
 <details>
 <summary>Additional model-state and forecast-performance illustrations</summary>
 
