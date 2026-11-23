@@ -1,8 +1,8 @@
 # QuantDiffForecast
 
-QuantDiffForecast fits ordinary differential equation (ODE) models to one or more observed time series in MATLAB. It estimates parameters, generates short-term forecasts with prediction intervals, and evaluates forecasts against held-out observations. The examples below use daily influenza counts from San Francisco in 1918. You can use your own model by specifying its equations and how each observed series relates to a model state.
+QuantDiffForecast fits ordinary differential equation (ODE) models to one or more observed time series in MATLAB. It estimates parameters, generates short-term forecasts with prediction intervals, and evaluates forecasts against held-out observations. The quick start uses daily influenza counts from San Francisco in 1918. A second example fits reported COVID-19 cases in Spain. You can use your own model by specifying its equations and how each observed series relates to a model state.
 
-[Quick start](#quick-start) · [Use your own data](#using-your-own-data) · [Forecast evaluation](#rolling-windows-and-forecast-horizons) · [Profile likelihood](#profile-likelihood) · [Parameter recovery](#practical-identifiability-simulations) · [Output files](#outputs) · [Published tutorial](https://doi.org/10.1002/sim.10036) · [Video tutorial](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)
+[Quick start](#quick-start) · [Use your own data](#using-your-own-data) · [Forecast evaluation](#read-a-forecast-score) · [Compare forecasts](#compare-models-across-forecast-origins) · [Initial conditions](#initial-conditions-for-each-window) · [Profile likelihood](#profile-likelihood) · [Parameter recovery](#practical-identifiability-simulations) · [Output files](#outputs) · [Figures](#example-visualizations) · [Published tutorial](https://doi.org/10.1002/sim.10036) · [Video tutorial](https://www.youtube.com/watch?v=eyyX63H12sY&t=41s)
 
 ## Requirements and installation
 
@@ -44,15 +44,17 @@ The two `1` arguments select one window starting at row 1. The runner fits the o
 | Calibration | 1–17 | 0–16 | 4 and 58 |
 | Held-out forecast targets | 18–27 | 17–26 | 124 and 1,104 |
 
-Read the predictions and scores from the same run. The last score row summarizes the ten held-out days.
+Read the predictions alongside the score for day 10 alone and the average score over all ten held-out days.
 
 ```matlab
 suffix = ['model_name-SEIR model-fit_index-5-fixI0-1-method-3-dist-3-' ...
           'tstart-1-tend-1-calibrationperiod-17-horizon-10-1918 Flu-cases.csv'];
 trajectory = readtable(fullfile('output', ['Forecast-' suffix]));
 scores = readtable(fullfile('output', ['performance-forecasting-' suffix]));
+byLead = readtable(fullfile('output', ['scores-byhorizon-' suffix]));
 disp(trajectory(18:27, {'time','data','median','LB','UB','model_median'}))
-disp(scores(end, :))
+disp(byLead(end, {'horizon','observed','median','abs_error','cover95','WIS'}))  % day 10
+disp(scores(end, :))   % days 1–10
 ```
 
 `median`, `LB` and `UB` summarize predicted observations (median and central 95% prediction interval). `model_median` summarizes the refitted model trajectories before observation noise is added. To view the figures, run `plotForecast_ODEModel(forecastOptions, 1, 1, 17, 10)` **after reading the CSV**. The plotter rewrites that file with the first five columns. The six-column table above remains available as `trajectory` in MATLAB. [Forecast runner](forecasting_odemodels%20code/Run_Forecasting_ODEModel.m) · [Forecast plotter](forecasting_odemodels%20code/plotForecast_ODEModel.m)
@@ -69,6 +71,8 @@ plotFit_ODEModel(fitOptions, 1, 1, 17);
 ```
 
 To inspect trajectories before fitting, use `plotODEModel(fitOptions)`. Both named quick-start options use method 3, 300 bootstrap datasets and `numstartpoints = 10`. Their starting values and lower bounds for β differ. Calling a runner **without arguments** selects a different options file. The default fit uses Poisson likelihood and 300 bootstrap datasets. The default forecast uses method 3 and 100 bootstrap datasets. [Named fit options](forecasting_odemodels%20code/options_fit_SEIR_flu1918_dist1_3.m) · [Default fit](forecasting_odemodels%20code/options_fit.m) · [Default forecast](forecasting_odemodels%20code/options_forecast.m)
+
+The Spain example fits reported cases using an SEIR model with an unreported infectious compartment. To fit the first 60 observations with a negative-binomial likelihood, run `Run_Fit_ODEModel(@options_fit_SEIR_unreported_covid_spain_dist1_3, 1, 1, 60)`. A Poisson fit is also provided. [Spain data](forecasting_odemodels%20code/input/curve-cases-covid-spain.txt) · [Negative-binomial options](forecasting_odemodels%20code/options_fit_SEIR_unreported_covid_spain_dist1_3.m) · [Poisson options](forecasting_odemodels%20code/options_fit_SEIR_unreported_covid_spain_dist1_1.m)
 
 ## Using your own data
 
@@ -97,7 +101,7 @@ For daily incidence, supply daily counts and choose a nondecreasing cumulative m
 `tstart1` and `tend1` are the first and last **window-start row indices**, inclusive. To forecast from three successive origins, run the following from the code folder.
 
 ```matlab
-opts = @options_forecast_SEIR_flu1918_dist1_3;
+opts = @options_forecast_SEIR_flu1918_IC;
 rng(1, 'twister');
 Run_Forecasting_ODEModel(opts, 1, 3, 17, 10);
 plotForecast_ODEModel(opts, 1, 3, 17, 10);
@@ -105,13 +109,49 @@ plotForecast_ODEModel(opts, 1, 3, 17, 10);
 
 The last window fits rows 3–19 and forecasts rows 20–29. With `getperformance = 1`, evaluation requires data through row `tend1 + windowsize1 - 1 + forecastingperiod`. If the runner shortens `tend1` to fit the data, use the reported end index in the plotter. For a projection beyond the observed series, set `getperformance = 0` in a copy of the forecast options. The saved `timevect2` grid supplies future time labels where CSV entries are `NaN`.
 
+### Initial conditions for each window
+
+In the quick start, the first observation sets the fitted state $C(0)$ and `vars.initial` supplies the other states. A later window using those options would restart with the same four infectious individuals as row 1. The runners issue `QuantDiffForecast:rollingInitialStates` when a window starts after row 1, the model has unfitted states and the options omit an initial-condition function.
+
+The rolling example above uses `vars.initialFcn = @(p, x0, vars) ...` to initialize each window. Here `p` contains the current model parameters and `x0` contains the starting values of the fitted states. Return one finite, real, nonnegative value per state in `vars.label` order. The toolbox then sets the states indexed by `vars.fit_index` to `x0`. With `params.fixI0 = 1`, these entries equal the first observations in the window. With `params.fixI0 = 0`, they are estimated.
+
+For the 1918 example, $I(0)$ is estimated, $E(0)$ is approximated by the first daily count divided by κ, and $R(0)$ is approximated by the number of cases reported before the window. The susceptible count is the remainder of the population. For your own model, `vars.window` provides the start row (`tstart`), calibration rows (`rows`), first time label (`time0`), first observations (`firstObs`) and the sum of each observed series over preceding rows (`priorCum`). The interpretation of that sum as removals is specific to this example. [1918 options](forecasting_odemodels%20code/options_forecast_SEIR_flu1918_IC.m) · [Initial-condition function](forecasting_odemodels%20code/quantdiffInitialConditions.m)
+
 ### Read a forecast score
 
-Each row `h` of `performance-forecasting-*.csv` scores **all leads from 1 through `h`** at one forecast origin. For example, row 10 gives the mean absolute error (MAE), mean squared error (MSE), 95% prediction interval coverage (%) and weighted interval score (WIS) over ten targets. To examine the error at day 10 alone, compare the observed count and predictive median in the tenth held-out row of the trajectory CSV. Lower MAE, MSE and WIS indicate better performance on the same targets. [Point scores and coverage](forecasting_odemodels%20code/computeforecastperformance.m) · [WIS](forecasting_odemodels%20code/computeWIS.m)
+With `getperformance = 1` and a fully observed forecast period, `Run_Forecasting_ODEModel` writes two score tables per fitted series and origin. WIS is the weighted interval score. Lower WIS indicates a better probabilistic forecast on the same targets.
+
+| Evaluation question | File | Interpretation of row 10 |
+| --- | --- | --- |
+| How accurate was the forecast **on day 10**? | `scores-byhorizon-*.csv` | The observed count, predictive median, absolute and squared error, and WIS for day 10. `cover50` and `cover95` are 0/1 indicators for that observation. |
+| How accurate were the forecasts **over days 1–10**? | `performance-forecasting-*.csv` | Mean absolute error (MAE), mean squared error (MSE), 95% prediction interval coverage (%) and mean WIS across the ten targets. The baseline comparison figure uses this cumulative WIS. |
+
+The per-horizon table also reports `WIS_log`, computed after clipping negative values to zero and transforming observations and draws with `log1p`. When the runner can generate a flat baseline, `WIS_baseline` gives its score and `relWIS` gives the model-to-baseline ratio. For a positive baseline WIS, a ratio below 1 favors the model. [Per-horizon scoring](forecasting_odemodels%20code/quantdiffForecastScores.m) · [Cumulative point scores](forecasting_odemodels%20code/computeforecastperformance.m) · [Cumulative WIS](forecasting_odemodels%20code/computeWIS.m)
+
+### Compare models across forecast origins
+
+Compare the two SEIR initializations on the same observations. The rows of `windows` are `[first calibration row, number of calibration rows]`. These three expanding windows all begin at row 1. Each produces a ten-day forecast.
+
+```matlab
+models = {@options_forecast_SEIR_flu1918_dist1_3, @options_forecast_SEIR_flu1918_IC};
+labels = {'Quick-start SEIR', 'Window-specific SEIR'};
+windows = [1 14; 1 17; 1 20];
+R = quantdiffCompareForecasts(models, windows, 10, 'Labels', labels, ...
+    'Baseline', 'flat', 'Run', true, 'Seed', 1, 'Name', 'flu1918');
+disp(R.byHorizon(R.byHorizon.horizon == 10, :))   % day 10 across origins
+disp(R.summary)   % all shared targets
+```
+
+The example reuses saved forecasts and runs any missing single-window forecasts. By default, `'Run', false` requires saved files. Give each model configuration a distinct `model.name` when changing settings, such as the bootstrap count, that do not appear in filenames. For files from a rolling run such as `Run_Forecasting_ODEModel(opts, 1, 3, 17, 10)`, use `[1 17; 2 17; 3 17]` and `'Tend', 3` to match the saved filenames. For multiple observed series, `'FitIndex', 2` selects the second fitted series.
+
+`R.perHorizon` has one row per model, origin and target. `R.byHorizon` averages over origins for each lead, and `R.summary` averages over all targets with finite scores for every model and the chosen baseline. Summary `relWIS` is the mean model WIS divided by the mean baseline WIS. For daily counts, use `'Aggregate', 7` to score weekly totals. The scorer sums each predictive trajectory and the observations over successive seven-day blocks before scoring. A 14-day horizon gives two weekly targets. With a ten-day horizon, only the first seven days form a complete block. [Model comparison](forecasting_odemodels%20code/quantdiffCompareForecasts.m)
 
 ### Baselines and forecast ensembles
 
-Compare the quick-start model with a baseline using exactly the same ten targets. The flat baseline centers forecasts on the last calibration observation and samples historical changes. The trend baseline extrapolates a log-linear fit to the last seven observations by default. The following uses the `scores` table from the quick start.
+The flat baseline centers forecasts on the last calibration observation and samples historical changes. The trend baseline extrapolates a log-linear fit to the last seven observations by default. Select `'Baseline', 'flat'`, `'trend'` or `'none'` in the comparison above. For a single saved forecast, `quantdiffForecastScores` accepts the predictive draws (`forecast2`), the matching two-column observations (`[time, value]`), calibration length and horizon. Its optional `'BaselineDraws'` argument accepts draws from `baselineForecast`. [Baseline implementation](forecasting_odemodels%20code/baselineForecast.m)
+
+<details>
+<summary>Score a baseline directly for the quick-start forecast</summary>
 
 ```matlab
 data = load(fullfile('input', 'curve-flu1918SF.txt'));
@@ -121,9 +161,19 @@ baselineDraws = baselineForecast(calib, 10, 'flat', 6000, 1);
 relativeWIS = scores.WIS(end) / baselineWIS(end, 2)
 ```
 
-A ratio below 1 means the model achieved a lower WIS than the baseline over the ten days. Substitute `'trend'` to evaluate the trend baseline. [Baseline implementation](forecasting_odemodels%20code/baselineForecast.m)
+This uses the quick-start `scores` table and the same ten held-out counts. Substitute `'trend'` to compare with the trend baseline.
 
-`run_ensemble` combines saved member forecasts for the same series, window and horizon. It supports equal weights (`-1`), Akaike weights (`0` or `1`), inverse calibration WIS (`2`) and softmax calibration WIS (`3`). This workflow requires the external function `getensemble_linearpool_from_curves` on the MATLAB path. The repository includes the single-model and baseline functions, but omits this pooling dependency. [Ensemble interface](forecasting_odemodels%20code/run_ensemble.m) · [Weight definitions](forecasting_odemodels%20code/ensembleWeights.m)
+</details>
+
+To combine the forecasts from the comparison above, reuse its saved 17-observation fits. This example gives the two models equal weight.
+
+```matlab
+E = run_ensemble(models, labels, -1, 17, 10, 'flu1918-equal', 'Plot', false);
+disp(E.weights)
+disp(E.relWIS_ens)   % relative WIS against the flat and trend baselines
+```
+
+The bundled pooling function combines member predictive distributions for the same series, window and horizon. It computes ensemble scores from the exact quantiles of the weighted empirical distribution. Weight codes are `-1` for equal weights, `0` or `1` for Akaike weights, `2` for inverse calibration WIS and `3` for softmax calibration WIS. [Ensemble runner](forecasting_odemodels%20code/run_ensemble.m) · [Pooling function](forecasting_odemodels%20code/getensemble_linearpool_from_curves.m) · [Weight definitions](forecasting_odemodels%20code/ensembleWeights.m)
 
 ## Profile likelihood
 
@@ -140,7 +190,7 @@ disp(PL.param(1).CI)
 
 `opts.alpha` sets the significance level for the likelihood-ratio threshold. Read the approximate 95% confidence interval with the reference status and the profile plot. An endpoint at a search bound can reflect the chosen bound. If the optimizer failed or exhausted its search budget, inspect `stopReason` and the explored range before reporting an endpoint. The flatness index (`FI`) is the largest deviance at points free of flagged nuisance-parameter bounds divided by the threshold. A value near zero means the likelihood changed little across those points. Structural identifiability requires a separate analysis.
 
-For a comparison across observation windows and choices of free parameters, run `plot_PL_1918_examples`. The script clears the workspace and produces a 12-panel figure from six configurations, including a simulated series with known parameters. [Profile examples](forecasting_odemodels%20code/plot_PL_1918_examples.m)
+For a comparison across observation windows and choices of free parameters, run `plot_PL_1918_examples`. The script clears the workspace and produces a 12-panel figure from six configurations, including a simulated series with known parameters. In case C, both β and population size $N$ are estimated, and $S(0)$ follows each trial value of $N$. The first 17 observations favor a small population that is inconsistent with subsequent case counts. Here, interpreting the early slowdown as susceptible depletion gives a misleading estimate of population size. [Case C options](forecasting_odemodels%20code/options_fit_SEIR_flu1918_PL_C.m) · [Profile examples](forecasting_odemodels%20code/plot_PL_1918_examples.m)
 
 ## Practical identifiability simulations
 
@@ -152,7 +202,7 @@ Edit **USER SETTINGS** in `plotPracticalIdentifiabilityResults.m`, then run the 
 plotPracticalIdentifiabilityResults
 ```
 
-Open `output/EXP_Negbin3-alpha5_W30-10-50/recovery_summary.csv`. Each row represents one parameter and one window length.
+The replicate runner scores point errors, interval coverage and WIS from the predictive draws that include observation noise. Open `output/EXP_Negbin3-alpha5_W30-10-50/recovery_summary.csv` for the parameter recovery results. Each row represents one parameter and one window length.
 
 | Question | Columns to read | Interpretation |
 | --- | --- | --- |
@@ -202,6 +252,7 @@ The fitting and profile runners expect a fit-type options function (13 outputs).
 | `params.label`, `params.initial`, `params.LB`, `params.UB` | Parameter names, starting values and finite bounds in the order used by the ODE. Starting values must lie within the bounds. |
 | `params.fixed`, `params.fixI0` | `fixed = 1` holds the corresponding parameter at its initial value. `fixI0 = 1` pins each fitted state’s initial value to its first observation. Set a parameter’s `fixed` entry to `0` to estimate it, or set `fixI0 = 0` to estimate the fitted states’ initial values. Bootstrap datasets retain the first observation of each series in both cases. |
 | `vars.label`, `vars.initial`, `vars.fit_index`, `vars.fit_diff` | State names, initial conditions, observed-state indices and level/increment flags. |
+| `vars.initialFcn` (optional) | Function of the current parameters, fitted initial values and calibration window. See [Initial conditions for each window](#initial-conditions-for-each-window). |
 | `params.composite`, `params.composite_name`, `params.extra0` | Optional derived-quantity function and label, and extra data passed to the ODE. Set the function to `[]` when unused. |
 | `method1`, `dist1` | Fitting objective and observation-noise model. The options function sets the global `method1`. See the combinations below. |
 | `B`, `numstartpoints` | Bootstrap datasets per window and starting-point budget for the original fit. The optimizer also adds seed and perturbed starts. |
@@ -226,7 +277,7 @@ Here $\mu$ is the predicted observation, $\alpha$ is dispersion and $d$ is the v
 <details>
 <summary>Optimizer settings and AICc</summary>
 
-The named quick-start options request parallel local fits. Set `params.useParallel = false` in a copy for serial fitting. If a parallel pool is unavailable, the optimizer falls back to serial execution. With `params.logscale = true`, free coordinates with positive lower bounds are searched on a log scale and reported in their original units.
+The named quick-start options and the default forecast options enable parallel local fits, log-scale search and polishing. Set `params.useParallel = false` in a copy for serial fitting. If a parallel pool is unavailable, the optimizer falls back to serial execution. With `params.logscale = true`, free coordinates with positive lower bounds are searched on a log scale and reported in their original units.
 
 | Optional field | Default when omitted | Purpose |
 | --- | --- | --- |
@@ -246,7 +297,9 @@ All paths below are relative to `forecasting_odemodels code/output/`. A forecast
 | File or prefix | What it contains |
 | --- | --- |
 | `Forecast-model_name-*.csv` | Observations, predictive median, 95% prediction limits and the runner’s `model_median`. The forecast plotter rewrites the file with five columns and uses the raw predictive median. The runner clips its exported medians and limits at zero. |
-| `performance-calibration-*.csv`, `performance-forecasting-*.csv` | MAE, MSE, 95% prediction interval coverage (%) and WIS. Use the forecasting file for held-out evaluation. |
+| `performance-calibration-*.csv`, `performance-forecasting-*.csv` | MAE, MSE, 95% prediction interval coverage (%) and WIS. Row `h` of the forecasting file summarizes leads 1 through `h` at one origin. |
+| `scores-byhorizon-*.csv` | One forecast lead per row for a single model and origin. Includes individual errors, coverage indicators, WIS, log-scale WIS and, when available, flat-baseline scores. |
+| `scores-comparison-<name>-perhorizon.csv`, `-byhorizon.csv`, `-summary.csv` | Model comparison at each target, by lead across origins, and across all shared targets. `quantdiffCompareForecasts` writes these by default. |
 | `quantile-*.csv`, `StateVars-*.csv` | The plotter exports 23 predictive quantiles from 0.01 to 0.99. State files summarize bootstrap trajectories. In rolling runs, successive windows reuse the same state CSV filename. Run one start at a time to keep one state CSV per origin. |
 | `parameters-rollingwindow-*.csv`, `parameters-composite-*.csv` | Point estimates from the observed data and 2.5th/97.5th bootstrap percentiles. For a derived quantity, the central estimate is its value at the observed-data fit. |
 | `AICc-*.csv` | AICc, its two additive components and the count of estimated quantities. |
@@ -354,12 +407,14 @@ The next four figures compare forecasts across calibration lengths, observation 
 | Task or symptom | Command or remedy |
 | --- | --- |
 | Check input validation | `qdfSmokeTest([7 8])` checks that unsupported methods and negative count observations are caught. |
-| Exercise the main workflows | `qdfSmokeTest()` runs the first eight tests. `qdfSmokeTest2()` adds ten checks, including multiple series and rolling windows. `qdfSmokeTest3(1:3)` covers recovery plotting, a fit with three free model parameters and a profile of κ. |
+| Exercise the main workflows | `qdfSmokeTest()` runs the first eight tests. `qdfSmokeTest2()` adds ten checks, including multiple series and rolling windows. `qdfSmokeTest3(1:3)` covers recovery plotting, a fit with three free model parameters and a profile of κ. `qdfSmokeTest3(4)` fits and plots the bundled Spain under-reporting example using the first 60 observations. |
+| Check initial conditions without fitting | `qdfTestInitialConditions()` checks state initialization and objective values against reference values. [Initial-condition checks](forecasting_odemodels%20code/qdfTestInitialConditions.m) |
+| Check forecast scores without fitting | `qdfTestForecastScores()` checks per-lead and cumulative scores, block totals, baseline ratios and missing targets. [Score checks](forecasting_odemodels%20code/qdfTestForecastScores.m) |
 | MATLAB cannot find a function | Run `which Run_Forecasting_ODEModel -all` and `ver` to check the active source folder and installed products. |
 | The plotter cannot find a forecast | Use the options and effective window indices, calibration length and horizon from the completed forecast. |
 | The options function returns too few outputs | Use a fit-type template for fitting or profiling and a forecast-type template for forecasting or simulation. |
 
-The fourth test in `qdfSmokeTest3` requires the Spain dataset (`curve-cases-covid-spain.txt`) and the functions `SEIR_unreported.m` and `R0s_unreported.m`. These files are absent from this distribution. [First test suite](forecasting_odemodels%20code/qdfSmokeTest.m) · [Second suite](forecasting_odemodels%20code/qdfSmokeTest2.m) · [Third suite](forecasting_odemodels%20code/qdfSmokeTest3.m)
+The smoke tests print a verdict for each requested workflow. [First test suite](forecasting_odemodels%20code/qdfSmokeTest.m) · [Second suite](forecasting_odemodels%20code/qdfSmokeTest2.m) · [Third suite](forecasting_odemodels%20code/qdfSmokeTest3.m)
 
 For a software issue, include the command, options file, source revision, MATLAB version, error text and a small shareable dataset. For scientific questions, contact Gerardo Chowell at Georgia State University. [GitHub Issues](https://github.com/gchowell/QuantDiffForecast-Toolbox/issues) · [gchowell@gsu.edu](mailto:gchowell@gsu.edu)
 
