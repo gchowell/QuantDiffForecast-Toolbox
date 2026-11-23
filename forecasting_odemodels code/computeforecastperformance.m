@@ -39,7 +39,7 @@ Ut=(Ut>=0).*Ut;
 
 coverage1=find(datac>=Lt & datac<=Ut);
 
-'prediction coverage (%)='
+%'prediction coverage (%)='
 PIc=100*(length(coverage1)./length(datac));
 
 PICS=[PICS;[  PIc]];
@@ -130,4 +130,3 @@ if forecastingperiod>0
     end
     
 end
-

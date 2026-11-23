@@ -81,6 +81,20 @@ params.fixed=[0 1 1 1]; % Boolean vector to indicate any parameters that should 
 params.fixI0=1; % Boolean variable indicating if the initial value of the fitting variable is fixed according to the first observation in the time series (1). Otherwise, it will be estimated along with other parameters.
 params.composite=@R0s;  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
 params.composite_name='R_0'; % Name of the composite parameter
+params.extra0=[]; % optional constants passed into the model function (empty if none)
+
+% <==============================================================================>
+% <========================== Optimizer settings (fit_model) ====================>
+% <==============================================================================>
+% All optional; see the header of fit_model.m. The optimizer searches only the
+% estimated parameters, each rescaled to [0,1] by its bounds.
+
+params.logscale=true; % search in log10 of positive-bounded parameters (recommended when an estimated parameter spans several orders of magnitude, e.g. K, N or alpha in methods 3-5)
+params.optimOptions=[]; % fmincon overrides, e.g. struct('StepTolerance',1e-8,'FunctionTolerance',1e-8,'FiniteDifferenceStepSize',1e-5); [] keeps the toolbox defaults
+params.useParallel=true; % run the MultiStart local solves on a parallel pool (Parallel Computing Toolbox); falls back to serial if no pool is available
+params.polish=true; % Nelder-Mead polish of the MultiStart solution when the gradient test below says it is not stationary
+params.polish_gradient_tol=1e-2; % run the polish only if the scaled gradient at the sqp solution exceeds this value
+params.polish_budget=100; % Nelder-Mead evaluations per free parameter
 
 vars.num=5; % number of variables comprising the ODE model
 vars.label={'S','E','I','R','C'}; % list of symbols to refer to the variables included in the model

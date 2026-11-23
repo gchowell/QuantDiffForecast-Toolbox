@@ -126,7 +126,10 @@ end
 % the calibration grid used by fit_model.
 timevect=data(:,1)*DT;
 
-IC=vars.initial;
+% Initial conditions at params.initial: vars.initial, or vars.initialFcn when
+% the options file supplies one, so simulated data follow the same rule as the
+% fits (see quantdiffInitialConditions).
+IC=quantdiffInitialConditions([params.initial vars.initial(vars.fit_index) 1 1],params,vars);
 
 % Tighter tolerances than the estimation policy in quantdiffODEOptions
 % (1e-6/1e-8): the exploratory curves should not carry solver error.
@@ -181,7 +184,10 @@ for x=1:length(vars.fit_index)
             end
 
             try
-                [~,F]=ode15s(model.fc,timevect,IC,options,param1,params.extra0);
+                % Initial conditions of THIS draw: with vars.initialFcn they follow
+                % the drawn parameters (an infeasible draw throws and is redrawn).
+                ICdraw=quantdiffInitialConditions([param1(:)' vars.initial(vars.fit_index) 1 1],params,vars);
+                [~,F]=ode15s(model.fc,timevect,ICdraw,options,param1,params.extra0);
             catch
                 F=[];
             end
@@ -482,7 +488,7 @@ disp('<=========================================================================
 % Display Model Variables
 disp('Model Variables:');
 disp(['  - Labels: ', strjoin(vars.label, ', ')]);
-disp(['  - Initial Conditions: ', num2str(vars.initial)]);
+disp(['  - ', quantdiffDescribeInitialConditions(params, vars)]);
 disp(['  - Fit Variable Index: ', num2str(vars.fit_index)]);
 disp(['  - Fit Derivative (fit_diff): ', num2str(vars.fit_diff)]);
 disp('<============================================================================>');

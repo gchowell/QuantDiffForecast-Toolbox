@@ -11,7 +11,13 @@
 %   Run_ProfileLikelihood_ODEModel.m and the fit_model.m with the PIN input
 %   options_fit_SEIR_flu1918_dist1_3.m   (bundled)            -> A, D
 %   options_fit_SEIR_flu1918_PL_B.m      (fixed = [0 0 0 1])  -> B
-%   options_fit_SEIR_flu1918_PL_C.m      (fixed = [0 1 1 0], N in [1e3,1e7]) -> C
+%   options_fit_SEIR_flu1918_PL_C.m      (fixed = [0 1 1 0], N in [400,1e7], S(0) = N - I(0)) -> C
+%
+% Case C: with S(0) tied to N (vars.initialFcn) beta and N are separately
+% identifiable. On rows 1-17 the profile of N has a finite interval far below
+% the cases reported in the following week: the flattening of the last three
+% counts is read as susceptible depletion. It illustrates misspecification on
+% early data, not an estimate of the population size.
 %   options_fit_SEIR_flu1918_PL_F.m      (fixI0 = 0)          -> F
 %   options_fit_SEIR_flu1918_PL_E.m      (fixed = [0 0 0 1], method1 = 1) -> E, on simulated data
 
@@ -60,8 +66,8 @@ panels = {
     'B', '\beta',  'B: \beta - rows 1-17, \kappa \gamma free'
     'B', '\kappa', 'B: \kappa - rows 1-17, \beta \gamma free'
     'B', '\gamma', 'B: \gamma - rows 1-17, \beta \kappa free'
-    'C', 'N',      'C: N - rows 1-17, \beta free'
-    'C', '\beta',  'C: \beta - rows 1-17, N free'
+    'C', 'N',      'C: N free - early data favour a spuriously small N'
+    'C', '\beta',  'C: \beta - rows 1-17, N free with S(0) = N - I(0)'
     'E', '\beta',  'E: \beta - simulated complete epidemic, Poisson'
     'E', '\kappa', 'E: \kappa - simulated, \beta \gamma free'
     'E', '\gamma', 'E: \gamma - simulated, \beta \kappa free'

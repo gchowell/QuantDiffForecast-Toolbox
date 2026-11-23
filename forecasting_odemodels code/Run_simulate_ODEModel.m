@@ -131,7 +131,10 @@ printscreen1=printscreen1_INP;
 % calibration grid used by the fitting code.
 timevect=(0:1:windowsize1-1)'*DT;
 
-IC=vars.initial;
+% Initial conditions at params.initial: vars.initial, or vars.initialFcn when
+% the options file supplies one, so simulated data follow the same rule as the
+% fits (see quantdiffInitialConditions).
+IC=quantdiffInitialConditions([params.initial vars.initial(vars.fit_index) 1 1],params,vars);
 
 % Tolerances for the synthetic-data solve. These are tighter than the
 % estimation policy in quantdiffODEOptions (1e-6/1e-8) on purpose: the
@@ -270,7 +273,7 @@ if printscreen1
     disp(['  - Fixed Parameters: ', num2str(params.fixed)]);
     disp(['  - Fix Initial Value (fixI0): ', num2str(params.fixI0)]);
     disp(['  - State labels: ', strjoin(vars.label, ', ')]);
-    disp(['  - Initial Conditions: ', num2str(vars.initial)]);
+    disp(['  - ', quantdiffDescribeInitialConditions(params, vars)]);
     disp(['  - Fit Variable Index: ', num2str(vars.fit_index)]);
     disp(['  - Fit Derivative (fit_diff): ', num2str(vars.fit_diff)]);
     disp(['  - Simulated length (window + max(30,horizon)): ', num2str(windowsize1)]);

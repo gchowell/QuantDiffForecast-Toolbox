@@ -245,6 +245,10 @@ end
 % forecasts are not checked.
 quantdiffCheckNegativeData(method1, data, tstart1:(tend1+windowsize1-1), mfilename);
 
+% Later windows restart the states that are not fitted from vars.initial unless
+% the options file supplies vars.initialFcn: say so once, before any fitting.
+quantdiffCheckInitialStates(vars, tend1, mfilename);
+
 param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % point estimate (best fit to the data), 95% CI: LB, UB
 
 if method1==3 | method1==4
@@ -369,6 +373,11 @@ for i=tstart1:1:tend1  %rolling window analysis
     ydata=datac(:);
 
     I0=datac(1,:);
+
+    % Calibration-window context for vars.initialFcn (quantdiffInitialConditions):
+    % priorCum is the sum of every observed series over the rows before this window.
+    vars.window=struct('tstart',i,'rows',t_window,'time0',DT*data(i,1), ...
+        'firstObs',datac(1,:),'priorCum',sum(data(1:i-1,2:end),1));
 
     data1=[data(t_window,1) datac];
 
@@ -690,6 +699,25 @@ for i=tstart1:1:tend1  %rolling window analysis
                 fileName = strcat('performance-forecasting-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
                 fullFilePath = fullfile(outputDir, fileName);
                 writetable(T, fullFilePath);
+
+                % Per-horizon scores: every forecast step scored on its own (absolute
+                % error, 50% and 95% coverage, WIS on the natural and log scales), with
+                % the WIS of the flat baseline and the relative WIS. The running means
+                % of these rows are the cumulative table written just above
+                % (quantdiffForecastScores). The baseline uses its own random stream,
+                % so the global RNG and the results of the run are not affected.
+                try
+                    baseDrawsH = baselineForecast(data1(:,[1 j+1]), forecastingperiod, 'flat', size(forecast2,2), 1);
+                catch
+                    baseDrawsH = [];        % no baseline for this series: scores are written without it
+                end
+                if isempty(baseDrawsH)
+                    scoresH = quantdiffForecastScores(forecast2, datalatest(:,[1 j+1]), length(data1(:,1)), forecastingperiod);
+                else
+                    scoresH = quantdiffForecastScores(forecast2, datalatest(:,[1 j+1]), length(data1(:,1)), forecastingperiod, 'BaselineDraws', baseDrawsH);
+                end
+                fileName = strcat('scores-byhorizon-','model_name-',model.name,'-fit_index-',num2str(vars.fit_index(j)),'-fixI0-',num2str(params.fixI0),'-method-',num2str(method1),'-dist-',num2str(dist1),'-tstart-',num2str(i),'-tend-',num2str(tend1),'-calibrationperiod-',num2str(windowsize1),'-horizon-',num2str(forecastingperiod),'-',caddisease,'-',datatype,'.csv');
+                writetable(scoresH.perHorizon, fullfile(outputDir, fileName));
 
             end
 

@@ -92,6 +92,19 @@ params.composite='';    % no composite quantity
 params.composite_name='';
 params.extra0=[];       % extra inputs passed to the model function
 
+% <==============================================================================>
+% <========================== Optimizer settings (fit_model) ====================>
+% <==============================================================================>
+% All optional; see the header of fit_model.m. The optimizer searches only the
+% estimated parameters, each rescaled to [0,1] by its bounds.
+
+params.logscale=true; % search in log10 of positive-bounded parameters (recommended when an estimated parameter spans several orders of magnitude, e.g. K, N or alpha in methods 3-5)
+params.optimOptions=[]; % fmincon overrides, e.g. struct('StepTolerance',1e-8,'FunctionTolerance',1e-8,'FiniteDifferenceStepSize',1e-5); [] keeps the toolbox defaults
+params.useParallel=true; % run the MultiStart local solves on a parallel pool (Parallel Computing Toolbox); falls back to serial if no pool is available
+params.polish=true; % Nelder-Mead polish of the MultiStart solution when the gradient test below says it is not stationary
+params.polish_gradient_tol=1e-2; % run the polish only if the scaled gradient at the sqp solution exceeds this value
+params.polish_budget=100; % Nelder-Mead evaluations per free parameter
+
 vars.label={'C'};       % state variables
 vars.initial=5;         % initial condition(s)
 vars.fit_index=1;       % state matched to the observed series

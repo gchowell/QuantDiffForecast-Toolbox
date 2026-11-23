@@ -948,7 +948,7 @@ disp('<=========================================================================
 % Display Model Variables
 disp('Model Variables:');
 disp(['  - Labels: ', strjoin(vars.label, ', ')]);
-disp(['  - Initial Conditions: ', num2str(vars.initial)]);
+disp(['  - ', quantdiffDescribeInitialConditions(params, vars)]);
 disp(['  - Fit Variable Index: ', num2str(vars.fit_index)]);
 disp(['  - Fit Derivative (fit_diff): ', num2str(vars.fit_diff)]);
 disp('<============================================================================>');

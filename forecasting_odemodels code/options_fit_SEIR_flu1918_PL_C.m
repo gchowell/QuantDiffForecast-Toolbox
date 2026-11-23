@@ -156,7 +156,7 @@ model.name = 'SEIR model';   % Name of the ODE model
 
 % Define model parameters:
 params.label = {'\beta', '\kappa', '\gamma', 'N'}; % Symbols for model parameters
-params.LB = [0.01, 0.01, 0.01, 1000];              % Lower bounds for parameter estimates
+params.LB = [0.01, 0.01, 0.01, 400];               % Lower bounds for parameter estimates (N: just above the 362 cases in rows 1-17, so the minimum near N = 700 is interior)
 params.UB = [10, 2, 2, 10000000];                 % Upper bounds for parameter estimates
 params.initial = [0.6, 1/1.9, 1/4.1, 550000];    % Initial guesses for parameter values
 params.fixed = [0, 1, 1, 0];                     % Boolean vector to fix parameters (1) or estimate (0)
@@ -170,6 +170,11 @@ vars.label = {'S', 'E', 'I', 'R', 'C'};             % Symbols for model variable
 vars.initial = [params.initial(4) - 4, 0, 4, 0, 4]; % Initial conditions for model variables
 vars.fit_index = 5;                                 % Index of the variable to fit to observed data
 vars.fit_diff = 1;                                  % Fit the derivative of the fitting variable (1 = yes, 0 = no)
+
+% N is estimated in this file, so S(0) must follow it. Without this line S(0)
+% stays at params.initial(4) - 4 while N varies, beta and N enter SEIR1 only as
+% beta/N, and the profiles of both are flat by construction, whatever the data.
+vars.initialFcn = @(p, x0, vars) [p(4) - 4, 0, 4, 0, x0]; % S(0) = N - I(0); see quantdiffInitialConditions
 
 % <============================================================================>
 % <======= Parameters for Rolling Window Analysis ===========================>

@@ -267,6 +267,10 @@ end
 % forecasts are not checked.
 quantdiffCheckNegativeData(method1, data, tstart1:(tend1+windowsize1-1), mfilename);
 
+% Later windows restart the states that are not fitted from vars.initial unless
+% the options file supplies vars.initialFcn: say so once, before any fitting.
+quantdiffCheckInitialStates(vars, tend1, mfilename);
+
 param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % point estimate (best fit to the data), 95% CI: LB, UB
 
 if method1==3 | method1==4
@@ -396,6 +400,11 @@ for i=tstart1:1:tend1  %rolling window analysis
     ydata=datac(:);
 
     I0=datac(1,:);
+
+    % Calibration-window context for vars.initialFcn (quantdiffInitialConditions):
+    % priorCum is the sum of every observed series over the rows before this window.
+    vars.window=struct('tstart',i,'rows',t_window,'time0',DT*data(i,1), ...
+        'firstObs',datac(1,:),'priorCum',sum(data(1:i-1,2:end),1));
 
     data1=[data(t_window,1) datac];
 
@@ -668,7 +677,12 @@ for i=tstart1:1:tend1  %rolling window analysis
         forecast2=forecast_model12(currentEnd2+ 1 : currentEnd2 + length(data1(:,1))+forecastingperiod,:);
 
 
-        [RMSECS_model1, MSECS_model1, MAECS_model1,  PICS_model1, MISCS_model1, RMSEFS_model1, MSEFS_model1, MAEFS_model1, PIFS_model1, MISFS_model1]=computeforecastperformance(data1(:,[1 j+1]),datalatest(:,[1 j+1]),forecast1,forecast2,forecastingperiod);
+        % One predictive distribution for every score, as in Run_Forecasting_ODEModel
+        % and Run_Fit_ODEModel: point metrics (MAE/MSE/RMSE), the 95% PI and WIS are
+        % all computed from forecast2 (bootstrap + observation noise). This runner
+        % used to take the point metrics from forecast1 (the noise-free bootstrap
+        % curves), so its MAE/MSE were not comparable with the other runners'.
+        [RMSECS_model1, MSECS_model1, MAECS_model1,  PICS_model1, MISCS_model1, RMSEFS_model1, MSEFS_model1, MAEFS_model1, PIFS_model1, MISFS_model1]=computeforecastperformance(data1(:,[1 j+1]),datalatest(:,[1 j+1]),forecast2,forecast2,forecastingperiod);
 
         [WISC_model1,WISFS_model1]=computeWIS(data1(:,[1 j+1]),datalatest(:,[1 j+1]),forecast2,forecastingperiod);
 
@@ -748,7 +762,7 @@ for i=tstart1:1:tend1  %rolling window analysis
         UB1 = max(quantile(forecast2', 0.975)', 0);
         LB1 = max(quantile(forecast2', 0.025)', 0);
 
-        median1=median(forecast2,2);
+        median1=max(median(forecast2,2),0);          % predictive median, clipped at 0 like LB1/UB1 (as in the other runners)
 
         if printscreen1
 

@@ -38,6 +38,19 @@ function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model,param
 %                           .fixI0     (logical)  1=fix initial observed state to first datum; 0=estimate
 %                           .composite (function) handle for composite metric (e.g., @R0s) or []
 %                           .composite_name (char) name of composite metric (e.g., 'R_0')
+%                             Optimizer settings (read by fit_model; all optional):
+%                              .logscale  (logical)  1=search in log10 of positive-bounded parameters
+%                                                    (recommended when an estimated parameter spans
+%                                                    several orders of magnitude, e.g. K, N, alpha)
+%                              .optimOptions (struct) fmincon overrides, e.g.
+%                                                    struct('StepTolerance',1e-8,'FunctionTolerance',1e-8);
+%                                                    [] keeps the toolbox defaults
+%                              .useParallel (logical) 1=run MultiStart local solves on a parallel pool
+%                                                    (Parallel Computing Toolbox; serial if no pool)
+%                              .polish    (logical)  1=Nelder-Mead polish of the MultiStart solution
+%                              .polish_gradient_tol (scalar) polish only if the scaled gradient at the
+%                                                    sqp solution exceeds this value (default 1e-2)
+%                              .polish_budget (int)  Nelder-Mead evaluations per free parameter (default 100)
 %                           .extra0    (any)      optional constants passed into model
 %   vars            struct  State/fit settings:
 %                           .num      (int)       number of state variables
@@ -75,6 +88,9 @@ function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model,param
 %   • Set params.fixI0=1 to anchor the initial observed state to the first datum;
 %     set to 0 to estimate it jointly with other parameters.
 %   • (tstart1, tend1) index rolling windows, not calendar dates.
+%   • Convergence of every fit can be checked in fitDiagnostics (returned by
+%     fit_model): startAgreement close to 1 and a small scaledGradientInfNorm
+%     mean the local runs agree and the solution is stationary.
 %
 % Dependencies
 %   Optimization Toolbox (local solver, e.g., fmincon)
@@ -164,6 +180,19 @@ params.fixI0=1; % Boolean variable indicating if the initial value of the fittin
 params.composite=@R0s;  % Estimate a composite function of the individual model parameter estimates otherwise it is left empty.
 params.composite_name='R_0'; % Name of the composite parameter
 params.extra0=[]; % used to pass pass any extra parameters (e.g., data, static variables) to the model function
+
+% <==============================================================================>
+% <========================== Optimizer settings (fit_model) ====================>
+% <==============================================================================>
+% All optional; see the header of fit_model.m. The optimizer searches only the
+% estimated parameters, each rescaled to [0,1] by its bounds.
+
+params.logscale=true; % search in log10 of positive-bounded parameters (recommended when an estimated parameter spans several orders of magnitude, e.g. K, N or alpha in methods 3-5)
+params.optimOptions=[]; % fmincon overrides, e.g. struct('StepTolerance',1e-8,'FunctionTolerance',1e-8,'FiniteDifferenceStepSize',1e-5); [] keeps the toolbox defaults
+params.useParallel=true; % run the MultiStart local solves on a parallel pool (Parallel Computing Toolbox); falls back to serial if no pool is available
+params.polish=true; % Nelder-Mead polish of the MultiStart solution when the gradient test below says it is not stationary
+params.polish_gradient_tol=1e-2; % run the polish only if the scaled gradient at the sqp solution exceeds this value
+params.polish_budget=100; % Nelder-Mead evaluations per free parameter
 
 vars.num=5; % number of variables comprising the ODE model
 vars.label={'S','E','I','R','C'}; % list of symbols to refer to the variables included in the model

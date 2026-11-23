@@ -19,11 +19,12 @@ states = [];
 IC = [];
 try
     numFitIndices = numel(vars.fit_index);
-    I0 = z(params.num + (1:numFitIndices));
     alpha = z(params.num + numFitIndices + 1);
     d = z(params.num + numFitIndices + 2);
-    IC = vars.initial;
-    IC(vars.fit_index) = I0;
+    % vars.initial with the fitted states set to z's X0 entries, or the result of
+    % vars.initialFcn when the options file supplies one (parameter-dependent
+    % initial conditions; see quantdiffInitialConditions).
+    IC = quantdiffInitialConditions(z, params, vars);
     opts_ode = quantdiffODEOptions(IC);
 
     [tout, states] = ode15s(model.fc, timevect, IC, opts_ode, z, params.extra0);

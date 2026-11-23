@@ -295,7 +295,9 @@ if ~isempty(opts.simulate)
     end
     if isempty(sim.horizon), Tmax = 1000; else, Tmax = sim.horizon; end
     tsim = (0:DT:Tmax)';
-    ICsim = vars.initial(:)';
+    % same rule as the fits: vars.initialFcn, when given, sets the initial conditions
+    ICsim = quantdiffInitialConditions([params.initial vars.initial(vars.fit_index) 1 1], params, vars);
+    ICsim = ICsim(:)';
     [tout, Fsim] = ode15s(model.fc, tsim, ICsim, quantdiffODEOptions(ICsim), params.initial, params.extra0);
     if numel(tout) ~= numel(tsim) || any(~isfinite(Fsim(:)))
         error('ProfileLikelihood:simulate', 'The model could not be integrated at params.initial over %d steps.', Tmax);
@@ -348,6 +350,12 @@ datac    = data(t_window, 2:end);
 data1    = [data(t_window, 1) datac];
 I0       = datac(1, :);
 n        = numel(datac);
+
+% Calibration-window context for vars.initialFcn (quantdiffInitialConditions), and a
+% warning when a window that starts after row 1 would restart the unfitted states.
+vars.window = struct('tstart', tstart1, 'rows', t_window, 'time0', DT * data(tstart1, 1), ...
+    'firstObs', datac(1, :), 'priorCum', sum(data(1:tstart1-1, 2:end), 1));
+quantdiffCheckInitialStates(vars, tstart1, mfilename);
 % Sample size of the profiled-scale deviance (methods 0 and 6) and of the
 % parameter-count check: the fixed first point of each series (params.fixI0 = 1)
 % is not counted (quantdiffEffectiveN).

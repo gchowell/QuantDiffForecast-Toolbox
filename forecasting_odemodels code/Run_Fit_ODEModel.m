@@ -234,6 +234,10 @@ end
 % forecasts are not checked.
 quantdiffCheckNegativeData(method1, data, tstart1:(tend1+windowsize1-1), mfilename);
 
+% Later windows restart the states that are not fitted from vars.initial unless
+% the options file supplies vars.initialFcn: say so once, before any fitting.
+quantdiffCheckInitialStates(vars, tend1, mfilename);
+
 param_estims=zeros(params.num+length(vars.fit_index)+2,3,length(tstart1:1:tend1)); % point estimate (best fit to the data), 95% CI: LB, UB
 
 if method1==3 | method1==4
@@ -353,6 +357,11 @@ for i=tstart1:1:tend1  %rolling window analysis
     ydata=datac(:);
 
     I0=datac(1,:);
+
+    % Calibration-window context for vars.initialFcn (quantdiffInitialConditions):
+    % priorCum is the sum of every observed series over the rows before this window.
+    vars.window=struct('tstart',i,'rows',t_window,'time0',DT*data(i,1), ...
+        'firstObs',datac(1,:),'priorCum',sum(data(1:i-1,2:end),1));
 
     data1=[data(t_window,1) datac];
 
