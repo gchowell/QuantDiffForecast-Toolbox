@@ -341,52 +341,52 @@ A composite function receives a matrix with one row per parameter draw and retur
 
 ## Example visualizations
 
-The repository figures illustrate fits, forecast uncertainty and parameter estimates. Their exact values depend on the options and random draws used to generate them.
+The first four figures show an example fit to the 1918 San Francisco influenza series. In the fit and forecast panels, the first 17 observations cover days 0–16 and the ten held-out observations cover days 17–26. In plots labeled $C'(t)$, a plotted value represents the daily increment of the cumulative case state. These screenshots illustrate the toolbox displays. The four comparisons below have a separate regeneration script.
 
 <table>
   <tr>
     <td width="50%" align="center">
       <img src="docs/images/model_fit.png" alt="Example SEIR fit to the observed time series" width="100%"><br>
-      <sub>Model fit</sub>
+      <sub>Fit to daily counts on days 0–16. Blue circles are observations. Red dashed lines enclose the central 95% prediction interval.</sub>
     </td>
     <td width="50%" align="center">
       <img src="docs/images/forecast.png" alt="Example model forecast with uncertainty intervals" width="100%"><br>
-      <sub>Forecast with uncertainty</sub>
+      <sub>Ten-day forecast. The vertical dashed line marks the last calibration day (day 16).</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
       <img src="docs/images/parameters.png" alt="Example estimated parameters and interval summaries" width="100%"><br>
-      <sub>Parameter estimates (κ, γ, and N are fixed)</sub>
+      <sub>Bootstrap distribution of β. The red dashed line marks the fit to the observed counts. κ, γ and N are fixed.</sub>
     </td>
     <td width="50%" align="center">
       <img src="docs/images/R0.png" alt="Example bootstrap distribution of the basic reproduction number" width="100%"><br>
-      <sub>Basic reproduction number</sub>
+      <sub>Bootstrap distribution of the derived reproduction number, R₀ = β/γ, with γ fixed at 1/4.1 per day.</sub>
     </td>
   </tr>
 </table>
 
-The next four figures compare forecasts across calibration lengths, observation models and baselines, and show a profile likelihood. To regenerate them, run `make_readme_figures` from the code folder. It runs five forecasts and one profile with the shipped options, caches the summaries in `output/readme_figures_cache.mat` and saves the PNG files to `docs/images/`. [Figure script](forecasting_odemodels%20code/make_readme_figures.m)
+The next four figures use the shipped 1918 options and the same input series. From the code folder, run `make_readme_figures(true)` to recompute five forecasts and one profile likelihood and write these four PNGs to `docs/images/`. Calling `make_readme_figures` without an argument reuses completed results in `output/readme_figures_cache.mat`. [Figure script](forecasting_odemodels%20code/make_readme_figures.m)
 
 <p align="center">
   <img src="docs/images/forecast_by_calibration_length.png" alt="Ten-day SEIR forecasts from the first 14, 17 and 20 observations with 50% and 95% prediction intervals" width="100%"><br>
-  <sub>Ten-day forecasts from three calibration lengths (<a href="#rolling-windows-and-forecast-horizons">forecast evaluation</a>)</sub>
+  <sub>Ten-day forecasts after 14, 17 and 20 observations. Each window has a different set of ten held-out days. Shading shows the 50% and 95% prediction intervals (<a href="#rolling-windows-and-forecast-horizons">forecast evaluation</a>)</sub>
 </p>
 
 <p align="center">
   <img src="docs/images/noise_model_comparison.png" alt="The same SEIR forecast under least squares with normal noise, Poisson likelihood and negative-binomial likelihood" width="100%"><br>
-  <sub>One model and dataset under three observation models (<a href="#estimation-methods-and-observation-models">methods</a>)</sub>
+  <sub>Three methods fitted to days 0–16 and scored on days 17–26. The 95% prediction intervals contain 2 of 10 counts for least squares with Gaussian noise, 6 of 10 for Poisson, and 7 of 10 for negative binomial (<a href="#estimation-methods-and-observation-models">methods</a>)</sub>
 </p>
 
 <table>
   <tr>
     <td width="62%" align="center">
       <img src="docs/images/baseline_comparison.png" alt="SEIR forecast compared with the flat and trend baselines, with weighted interval score by forecast horizon" width="100%"><br>
-      <sub>SEIR forecast and WIS against the flat and trend baselines (<a href="#baselines-and-forecast-ensembles">baselines</a>)</sub>
+      <sub>At lead h, each curve shows mean WIS over leads 1 through h. Over all ten days the SEIR-to-baseline WIS ratios are 0.30 for trend and 0.11 for flat (<a href="#baselines-and-forecast-ensembles">baselines</a>)</sub>
     </td>
     <td width="38%" align="center">
       <img src="docs/images/profile_likelihood_beta.png" alt="Profile likelihood of the transmission rate with the 95% threshold and interval" width="100%"><br>
-      <sub>Profile likelihood of β (<a href="#profile-likelihood">profile likelihood</a>)</sub>
+      <sub>Profile likelihood of β using the first 17 observations. The shaded area is the approximate 95% likelihood-ratio interval for β (<a href="#profile-likelihood">profile likelihood</a>)</sub>
     </td>
   </tr>
 </table>
@@ -394,11 +394,17 @@ The next four figures compare forecasts across calibration lengths, observation 
 <details>
 <summary>Additional model-state and forecast-performance illustrations</summary>
 
+**Before fitting.** The blue curves use sampled parameter values. The green curve has the smallest sum of squared errors among those draws. The right panel zooms in on the observations. [Model exploration plotter](forecasting_odemodels%20code/plotODEModel.m)
+
 ![Example model trajectories before fitting](docs/images/model_solutions.png)
+
+**State trajectories.** The five panels show S, E, I, R and cumulative cases C. The solid line is the bootstrap median and the dashed lines are the 2.5th and 97.5th percentiles of the model states. [Fit plotter](forecasting_odemodels%20code/plotFit_ODEModel.m)
 
 ![Example state-variable trajectories and uncertainty summaries](docs/images/stateVars.png)
 
-![Example forecast-performance summaries](docs/images/forecastingPerformance.png)
+**Forecast performance from an earlier run.** Each point summarizes leads 1 through h. The 95% coverage curve ends at 90% (9 of 10 days). The scripted 17-observation negative-binomial comparison above shows 70% (7 of 10). Use the score CSV from the same run as the forecast when reporting coverage or WIS. [Forecast plotter](forecasting_odemodels%20code/plotForecast_ODEModel.m)
+
+![Cumulative MAE, MSE, 95% prediction interval coverage and WIS from an earlier forecast](docs/images/forecastingPerformance.png)
 
 </details>
 
