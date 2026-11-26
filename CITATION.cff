@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use QuantDiffForecast, please cite the tutorial paper below (preferred citation). To cite the exact software version you used, cite this release."
+title: "QuantDiffForecast: a MATLAB toolbox for parameter estimation and forecasting with quantified uncertainty for ordinary differential equation models"
+type: software
+version: "2.0.0"
+date-released: "2026-11-26"
+license: CC0-1.0
+repository-code: "https://github.com/gchowell/QuantDiffForecast-Toolbox"
+keywords:
+  - ordinary differential equation models
+  - parameter estimation
+  - epidemic forecasting
+  - parametric bootstrap
+  - profile likelihood
+  - practical identifiability
+  - MATLAB
+authors:
+  - family-names: Chowell
+    given-names: Gerardo
+    email: gchowell@gsu.edu
+    affiliation: "Department of Population Health Sciences, School of Public Health, Georgia State University"
+    orcid: "https://orcid.org/0000-0003-2194-2251"
+preferred-citation:
+  type: article
+  title: "Parameter estimation and forecasting with quantified uncertainty for ordinary differential equation models using QuantDiffForecast: A MATLAB toolbox and tutorial"
+  authors:
+    - family-names: Chowell
+      given-names: Gerardo
+      orcid: "https://orcid.org/0000-0003-2194-2251"
+    - family-names: Bleichrodt
+      given-names: Amanda
+    - family-names: Luo
+      given-names: Ruiyan
+  journal: "Statistics in Medicine"
+  volume: 43
+  issue: 9
+  start: 1826
+  end: 1848
+  year: 2024
+  doi: "10.1002/sim.10036"

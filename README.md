@@ -23,7 +23,7 @@ addpath(codeDir);
 cd(codeDir);
 ```
 
-For a short installation check, run `qdfSmokeTest(2)`. It fits and plots a forecast using 20 bootstrap datasets and prints a verdict. The full example below uses 300. Separate Windows and Mac packages are available. The Windows executable requires MATLAB Runtime R2023b. [Smoke test](forecasting_odemodels%20code/qdfSmokeTest.m) · [Standalone packages](stand%20alone%20executable/) · [Windows deployment instructions](stand%20alone%20executable/readme.txt)
+For a short installation check, run `qdfSmokeTest(2)`. It fits and plots a forecast using 20 bootstrap datasets and prints a verdict. The full example below uses 300. Separate Windows and Mac packages are available. The Windows executable requires MATLAB Runtime R2023b. Both packages were last updated in April–May 2025 and do not include later changes to the MATLAB source, which is the current version. [Smoke test](forecasting_odemodels%20code/qdfSmokeTest.m) · [Standalone packages](stand%20alone%20executable/) · [Windows deployment instructions](stand%20alone%20executable/readme.txt)
 
 ## Quick start
 
@@ -312,7 +312,7 @@ All paths below are relative to `forecasting_odemodels code/output/`. A forecast
 | `PLsummary-*.csv`, `PLprofile-param-*.csv`, `PL-*.mat` | Profile intervals and status, pointwise profiles and the full profile result. The default run also saves a PNG. |
 | `results_W<W>_rep<r>.mat`, `recovery_summary.csv` | Results for each simulated replicate and the recovery summary in the study folder. |
 
-The runners report requested, accepted and unresolved bootstrap fits. Unresolved refits can still enter interval estimates, so inspect `numericalAudit` before interpreting narrow intervals. Save the seed, options file, source revision and outputs together. Changing `B`, parameter bounds or optimizer settings can reuse the same filenames.
+The runners report requested, accepted and unresolved bootstrap fits. Unresolved refits can still enter interval estimates, so inspect `numericalAudit` before interpreting narrow intervals. Save the seed, options file, release or source revision, and outputs together. Changing `B`, parameter bounds or optimizer settings can reuse the same filenames.
 
 ## Adding a model
 
@@ -428,7 +428,9 @@ For a software issue, include the command, options file, source revision, MATLAB
 
 ## Citation
 
-Chowell G, Bleichrodt A, Luo R. Parameter estimation and forecasting with quantified uncertainty for ordinary differential equation models using QuantDiffForecast: A MATLAB toolbox and tutorial. *Statistics in Medicine*. 2024, 43(9), 1826–1848. [DOI](https://doi.org/10.1002/sim.10036) · [PubMed](https://pubmed.ncbi.nlm.nih.gov/38378161/)
+Chowell G, Bleichrodt A, Luo R. Parameter estimation and forecasting with quantified uncertainty for ordinary differential equation models using QuantDiffForecast: A MATLAB toolbox and tutorial. *Statistics in Medicine*. 2024, 43(9), 1826–1848. [DOI](https://doi.org/10.1002/sim.10036) · [PubMed](https://pubmed.ncbi.nlm.nih.gov/38378161/) · [Software citation](CITATION.cff)
+
+Report the release you used. Changes in each release are listed in the [changelog](CHANGELOG.md).
 
 <details>
 <summary>BibTeX</summary>
