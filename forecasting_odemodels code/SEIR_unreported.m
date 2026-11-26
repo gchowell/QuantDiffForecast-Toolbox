@@ -2,7 +2,7 @@
 % < Author: Gerardo Chowell  ==================================================>
 % <============================================================================>
 
-function dx=SEIR1(t,x,params0,extra0)
+function dx=SEIR_unreported(t,x,params0,extra0)
 
 beta0=params0(1);
 beta1=params0(2);

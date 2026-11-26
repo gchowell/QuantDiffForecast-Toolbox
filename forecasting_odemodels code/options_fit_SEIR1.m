@@ -19,7 +19,16 @@ global method1 % Parameter estimation method
 % The first column corresponds to time index: 0,1,2, ... and the second
 % column corresponds to the observed time series data.
 
-cadfilename1='curve-SEIR model-\beta-0.6-\kappa-0.5-\gamma-0.33333-N-100000-M-1-dist1-1-factor1-1'; % Name of the data file containing the incidence curve
+% This example fits SIMULATED data, so the true value of the estimated parameter
+% is known: 100 daily counts from SEIR1 with beta=0.6, kappa=1/2, gamma=1/3,
+% N=100000 and initial state [N-5 0 5 0 5] (the values in params.initial and
+% vars.initial below), with Poisson noise on the daily increments of C after the
+% first point. A fit should return beta close to 0.6 (R_0 = beta/gamma = 1.8).
+% The series peaks near row 66; the default window uses the first 17 rows, where
+% counts are small, so try a longer window as well, e.g.
+%   Run_Fit_ODEModel(@options_fit_SEIR1, 1, 1, 40)
+
+cadfilename1='curve-SEIR-simulated-poisson'; % Name of the data file containing the incidence curve
 
 caddisease='simulated'; % string indicating the name of the disease related to the time series data
 

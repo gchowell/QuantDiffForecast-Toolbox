@@ -1,11 +1,17 @@
 function R = run_ensemble(optionsHandles, modelNames, weight_type1, calibrationperiods1, forecastingperiod1, name_ensemble, varargin)
 %RUN_ENSEMBLE  Weighted linear-pool ensemble of K previously run QuantDiffForecast models.
 %
-%   R = run_ensemble({@options_forecast_GLM_x, @options_forecast_RICH_x}, {'GLM','RICH'}, ...
-%                    weight_type1, calibrationperiods1, forecastingperiod1, 'GLM-RICH-Ensemble')
+%   R = run_ensemble(optionsHandles, modelNames, weight_type1, ...
+%                    calibrationperiods1, forecastingperiod1, name_ensemble)
 %   R = run_ensemble(..., 'tstart', 1, 'tend', 1, 'Nens', [], 'Seed', 1, 'Plot', true)
 %
-%   Replaces the six temp_run_ENS*.m scripts. For every calibration window it
+%   Example (both forecasts must already be saved for 17 calibration rows and
+%   a 10-step horizon, e.g. by Run_Forecasting_ODEModel(opts, 1, 1, 17, 10)):
+%     models = {@options_forecast_SEIR_flu1918_dist1_3, @options_forecast_SEIR_flu1918_IC};
+%     labels = {'Quick-start SEIR', 'Window-specific SEIR'};
+%     R = run_ensemble(models, labels, -1, 17, 10, 'flu1918-equal', 'Plot', false);
+%
+%   For every calibration window it
 %   (1) loads each model's 'Forecast-ODEModel-...' result written by
 %       Run_Forecasting_ODEModel (file name from qdf_forecast_matname, so the
 %       reader cannot drift from the writer), reading only the variables it
@@ -209,9 +215,9 @@ for w = 1:nW
         % Parameter-free baselines scored on the same targets with the same number
         % of draws: the forecast-hub flat baseline and a log-linear trend baseline
         % (see baselineForecast). Relative WIS = WIS / WIS_baseline; < 1 beats it.
-        % NOTE: the runner's saved data1 holds the LAST BOOTSTRAP REPLICATE (it is
-        % overwritten inside the bootstrap loop and never restored), so the observed
-        % calibration series is taken from datalatest, which is the real data.
+        % The observed calibration series is taken from datalatest. The runner's
+        % saved data1 holds the same observed rows (it restores them after the
+        % bootstrap loop), so here data1 only supplies the number of rows.
         calib = datalatest(1:size(data1, 1), 1:2);
         WISb = struct('flat', [], 'trend', []);
         for bt = {'flat', 'trend'}

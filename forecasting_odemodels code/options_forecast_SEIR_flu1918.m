@@ -75,11 +75,13 @@ function [cadfilename1,caddisease,datatype, dist1, numstartpoints,B, model, para
 %   A global variable 'method1' selects the estimation method; 'dist1' selects
 %   the observational error and is synchronized to 'method1' as follows:
 %
-%     method1 = 0  Nonlinear least squares (LSQ)
-%         dist1 options (choose one):
-%           dist1=0  Normal errors (homoscedastic LSQ)
-%           dist1=1  Poisson-like weighting (variance ≈ mean; LSQ variant)
-%           dist1=2  NegBin-like weighting with var = factor1·mean
+%     method1 = 0  Nonlinear least squares (LSQ). The objective is the same
+%         unweighted sum of squares for every dist1; dist1 only selects the
+%         noise used for the bootstrap and the prediction intervals:
+%           dist1=0  Normal noise (constant variance)
+%           dist1=1  Poisson noise (variance = mean)
+%           dist1=2  Negative binomial noise with var = factor1·mean
+%                    (factor1 estimated from the Pearson residuals of the fit)
 %                    (factor1 estimated empirically from the series; LSQ variant)
 %
 %     method1 = 1  MLE with Poisson errors          => dist1=1 (set automatically)
