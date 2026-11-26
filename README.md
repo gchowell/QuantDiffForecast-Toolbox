@@ -404,9 +404,9 @@ The next four figures use the shipped 1918 options and the same input series. Fr
 
 ![Example state-variable trajectories and uncertainty summaries](docs/images/stateVars.png)
 
-**Forecast performance from an earlier run.** Each point summarizes leads 1 through h. The 95% coverage curve ends at 90% (9 of 10 days). The scripted 17-observation negative-binomial comparison above shows 70% (7 of 10). Use the score CSV from the same run as the forecast when reporting coverage or WIS. [Forecast plotter](forecasting_odemodels%20code/plotForecast_ODEModel.m)
+**Forecast performance.** Scores for the 17-observation quick-start forecast. Each point summarizes leads 1 through h, so the last point of each curve equals row 10 of `performance-forecasting-*.csv`. The 95% coverage curve ends at 70% (7 of 10 days). [Forecast plotter](forecasting_odemodels%20code/plotForecast_ODEModel.m)
 
-![Cumulative MAE, MSE, 95% prediction interval coverage and WIS from an earlier forecast](docs/images/forecastingPerformance.png)
+![Cumulative MAE, MSE, 95% prediction interval coverage and WIS for the 17-observation quick-start forecast](docs/images/forecastingPerformance.png)
 
 </details>
 
