@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantdiffforecast"
+version = "0.1.0"
+description = "Python port of the QuantDiffForecast MATLAB toolbox: ODE model fitting and forecasting with quantified uncertainty"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "CC0-1.0" }
+dependencies = ["numpy>=1.22", "scipy>=1.9", "pandas>=1.4", "matplotlib>=3.5", "joblib>=1.1"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["quantdiffforecast*"]
