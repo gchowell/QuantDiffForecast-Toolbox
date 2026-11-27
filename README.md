@@ -25,6 +25,28 @@ cd(codeDir);
 
 For a short installation check, run `qdfSmokeTest(2)`. It fits and plots a forecast using 20 bootstrap datasets and prints a verdict. The full example below uses 300. Separate Windows and Mac packages are available. The Windows executable requires MATLAB Runtime R2023b. Both packages were last updated in April–May 2025 and do not include later changes to the MATLAB source, which is the current version. [Smoke test](forecasting_odemodels%20code/qdfSmokeTest.m) · [Standalone packages](stand%20alone%20executable/) · [Windows deployment instructions](stand%20alone%20executable/readme.txt)
 
+## Python version
+
+A Python port of the toolbox is in [`python/`](python/). It runs the same workflows (fitting, forecasting, forecast scores, model comparison, ensembles, profile likelihood and simulation studies) with NumPy, SciPy, pandas and matplotlib, and needs no MATLAB toolboxes. Install it with Python 3.9 or later:
+
+```bash
+pip install "git+https://github.com/gchowell/QuantDiffForecast-Toolbox.git#subdirectory=python"
+```
+
+The quick start below is the Python equivalent of `Run_Forecasting_ODEModel(@options_forecast_SEIR_flu1918_dist1_3, 1, 1, 17, 10)`:
+
+```python
+import quantdiffforecast as q
+from quantdiffforecast.examples import options_forecast_SEIR_flu1918_dist1_3
+
+res = q.run_forecasting(options_forecast_SEIR_flu1918_dist1_3(), 1, 1, 17, 10, seed=1)
+print(res.windows[0].series[0].performance_forecasting)
+```
+
+Results are written to `output/` in the folder you run from. CSV files have the same names and columns as the MATLAB ones, and `.npz` files replace `.mat` files. Point estimates match the MATLAB toolbox; bootstrap intervals and forecast scores agree to Monte Carlo error, because MATLAB and NumPy draw different random numbers from the same seed.
+
+The port has been checked against the reference values in this toolbox's tests and the results reported in this README. A direct comparison with a MATLAB run is pending. See [`python/README.md`](python/README.md) for the MATLAB-to-Python function table, how to define your own model, and how the port was made.
+
 ## Quick start
 
 ### Forecast ten days from the first 17 observations
