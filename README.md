@@ -107,7 +107,7 @@ Run_Forecasting_ODEModel(opts, 1, 3, 17, 10);
 plotForecast_ODEModel(opts, 1, 3, 17, 10);
 ```
 
-The last window fits rows 3–19 and forecasts rows 20–29. With `getperformance = 1`, evaluation requires data through row `tend1 + windowsize1 - 1 + forecastingperiod`. If the runner shortens `tend1` to fit the data, use the reported end index in the plotter. For a projection beyond the observed series, set `getperformance = 0` in a copy of the forecast options. The saved `timevect2` grid supplies future time labels where CSV entries are `NaN`.
+The last window fits rows 3–19 and forecasts rows 20–29. With `getperformance = 1`, evaluation requires data through row `tend1 + windowsize1 - 1 + forecastingperiod`. If the runner shortens `tend1` to fit the data, use the reported end index in the plotter. To forecast from the **last observation** of an `N`-row series, set `getperformance = 0` in a copy of the forecast options and pass `N - windowsize1 + 1` as both window-start arguments. For example, a 17-row window ending at row 63 starts at row 47. A 10-step forecast then covers rows 64–73. The saved `timevect2` grid supplies future time labels where CSV entries are `NaN`.
 
 ### Initial conditions for each window
 
