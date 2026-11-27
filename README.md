@@ -23,7 +23,7 @@ addpath(codeDir);
 cd(codeDir);
 ```
 
-For a short installation check, run `qdfSmokeTest(2)`. It fits and plots a forecast using 20 bootstrap datasets and prints a verdict. The full example below uses 300. Separate Windows and Mac packages are available. The Windows executable requires MATLAB Runtime R2023b. Both packages were last updated in April–May 2025 and do not include later changes to the MATLAB source, which is the current version. [Smoke test](forecasting_odemodels%20code/qdfSmokeTest.m) · [Standalone packages](stand%20alone%20executable/) · [Windows deployment instructions](stand%20alone%20executable/readme.txt)
+For a short installation check, run `qdfSmokeTest(2)`. It fits and plots a forecast using 20 bootstrap datasets and prints a verdict. The full example below uses 300. [Smoke test](forecasting_odemodels%20code/qdfSmokeTest.m)
 
 ## Python version
 
